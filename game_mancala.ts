@@ -3,7 +3,7 @@ let Game = require('./game.js')
 let Util = require('./util.js')
 let Chain = require('./chain.js')
 
-let g = new Game()
+let g = new Game(onCommand)
 var playerChain = new Chain(['a', 'b'])
 
 let playerPits = {
@@ -35,12 +35,12 @@ function setup() {
   console.log(g.toString())
 }
 
-function* rules() {
+async function rules() {
   let player = 'a'
   var winResult
 
   while (!winResult) {
-    player = yield* turn(player) // TODO must be yield* fn, not yield fn, not fn
+    player = await turn(player) // TODO must be yield* fn, not yield fn, not fn
     winResult = findWinner()
   }
 
@@ -48,10 +48,10 @@ function* rules() {
   Util.quit()
 }
 
-function* turn(player: string) {
+async function turn(player: string) {
   let validPlaces = g.filterPlaces(p => p.cards.length > 0 && playerPits[player].indexOf(p.name) >= 0)
-  let result = yield g.pickPlaces(player, validPlaces)
-  console.log(result)
+  let result = await g.pickPlaces(player, validPlaces)
+  g.validateResult(result)
 
   player = moveStones(player, result[1].name)
   console.log(g.toString())
@@ -114,20 +114,22 @@ function findWinner(): string {
   }
 }
 
+Util.quitOnCtrlBreak()
+
 setup()
 
-var rulesItr = rules()
-onResult([])
-
-function onResult(result: any[]) {
-  let itr = rulesItr.next(result)
-  if (!itr.done) {
-    onCommand(itr.value)
-  }
-}
+rules()
 
 function onCommand(command) {
-  setTimeout(() => onResult([command, Util.randomValue(command.options)]), 0)
+  // example showing a synchronous return value
+  //return [command, Util.randomValue(command.options)]
+
+  // example showing an async return value
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve([command, Util.randomValue(command.options)])
+    }, 0)
+  })
 }
 
-Util.quitOnCtrlBreak()
+console.log('****************************************')

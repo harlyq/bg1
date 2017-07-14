@@ -12,8 +12,6 @@ interface Player {
 
 interface Card {
   name: string
-  // TODO remove
-  //place?: Place // back pointer to location
 }
 
 interface Dice extends Card {
@@ -47,6 +45,7 @@ type CardName = string | [string] | CardFilterFn
 type PlaceName = string | [string] | PlaceFilterFn
 type PlayerName = string | [string] | PlayerFilterFn
 type Index = number | [number]
+type CommandFn = (command: PickCommand) => Promise<{}>
 
 interface Named {
   name: string
@@ -58,6 +57,11 @@ class Game {
   allPlayers: Player[] = []
   registeredConditions: PickCondition[] = []
   allValues: {[key: string]: any} = {}
+  onCommand: CommandFn // commands or just use pick?
+
+  constructor(onCommandFn: CommandFn) {
+    this.onCommand = onCommandFn
+  }
 
   static getThings<T>(name: string | string[] | ((Named) => boolean), things: (T & Named)[]): (T & Named)[] {
     if (typeof name === 'function') {
@@ -160,15 +164,6 @@ class Game {
     } else {
       to.cards.splice(index, 0, card)
     }
-
-    // TODO remove
-    // let oldPlace = card.place
-    // if (oldPlace) {
-    //   let oldIndex = oldPlace.cards.indexOf(card)
-    //   oldPlace.cards.splice(oldIndex, 1)
-    // }
-    //
-    // card.place = to
   }
 
   private removeCard(from: Place, index: number): Card {
@@ -182,8 +177,6 @@ class Game {
     } else {
       card = from.cards.splice(index, 1)[0]
     }
-    // TODO remove
-    //delete card.place
     return card
   }
 
@@ -213,8 +206,6 @@ class Game {
   }
 
   private addCardInternal(card: Card, to: Place, index: number) {
-    // TODO remove
-    //assert(!card.place)
     this.insertCard(card, to, index)
     this.allCards.push(card)
   }
@@ -379,25 +370,49 @@ class Game {
     return str
   }
 
-  public pick(who, options, count: PickCount = 1, condition?: PickCondition): PickCommand {
-    return {type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)}
+  public pick(who, options, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
+    return this.onCommand({type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
-  public pickCards(who, cards, count: PickCount = 1, condition?: PickCondition): PickCommand {
-    return {type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickCards(who, cards, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
+    return this.onCommand({type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
-  public pickPlaces(who, locations, count: PickCount = 1, condition?: PickCondition): PickCommand {
-    return {type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickPlaces(who, locations, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
+    return this.onCommand({type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
-  public pickPlayers(who, players, count: PickCount = 1, condition?: PickCondition): PickCommand {
-    return {type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickPlayers(who, players, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
+    return this.onCommand({type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
   // could we just use pick instead?
-  public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition): PickCommand {
-    return {type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
+    return this.onCommand({type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)})
+  }
+
+  public validateResult(result: any[]) {
+    if (result instanceof Promise) {
+      throw new Error('missing "await" before pick command')
+    }
+
+    if (!Array.isArray(result) || result.length === 0) {
+      throw new Error('result is not an array')
+    }
+
+    let command = result[0] as PickCommand
+    if (!command.options || !Array.isArray(command.options) || command.options.length === 0) {
+      throw new Error('original command is not the first element of the result')
+    }
+
+    for (var i = 1; i < result.length; ++i) {
+      if (command.options.indexOf(result[i]) === -1) {
+        throw new Error('the result contains options which were not in the original command')
+      }
+    }
+
+    // TODO validate the number of results against the count
+    // TODO recursively validate the options (as they may be further commands)
   }
 }
 

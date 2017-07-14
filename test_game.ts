@@ -102,7 +102,6 @@ Tape.test('test move', (test) => {
   test.deepEqual(g.getCards('Place3'), [card2, card1, card3], 'top card moved to bottom')
 
   test.comment('move cards, starting from empty places')
-  debugger
   g.move(['Place1', 'Place3'], 'Place2', -1, 0, -1)
   test.deepEqual(g.getCards('Place1'), [], 'place1 now empty')
   test.deepEqual(g.getCards('Place2'), [card2, card1, card3], 'all cards in place2')
