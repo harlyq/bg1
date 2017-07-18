@@ -1,11 +1,5 @@
 let Util = require('./util.js')
 
-function assert(cond, msg = "assert failed") {
-  if (!cond) {
-    debugger
-    throw new Error(msg)
-  }
-}
 interface Player {
   name: string
 }
@@ -31,6 +25,7 @@ type PickCount = number | number[]
 type PickCondition = (any) => boolean
 
 interface PickCommand {
+  id: number // starts from 0
   type: string
   who: string
   options: any[]
@@ -45,7 +40,7 @@ type CardName = string | [string] | CardFilterFn
 type PlaceName = string | [string] | PlaceFilterFn
 type PlayerName = string | [string] | PlayerFilterFn
 type Index = number | [number]
-type CommandFn = (command: PickCommand) => Promise<{}>
+type CommandFn = (Game, command: PickCommand) => Promise<{}>
 
 interface Named {
   name: string
@@ -58,9 +53,15 @@ class Game {
   registeredConditions: PickCondition[] = []
   allValues: {[key: string]: any} = {}
   onCommand: CommandFn // commands or just use pick?
+  history: any[] = []
+  uniqueId: number = 0
 
-  constructor(onCommandFn: CommandFn) {
+  constructor(onCommandFn?: CommandFn) {
     this.onCommand = onCommandFn
+  }
+
+  public getHistory(): any[] {
+    return this.history
   }
 
   static getThings<T>(name: string | string[] | ((Named) => boolean), things: (T & Named)[]): (T & Named)[] {
@@ -102,9 +103,9 @@ class Game {
   }
 
   public getCards(placeName: PlaceName): Card[] {
-    let places: Place[] = Game.getThings(placeName, this.allPlaces)
+    const places: Place[] = Game.getThings(placeName, this.allPlaces)
     var cards = []
-    for (var place of places) {
+    for (let place of places) {
       if (place.cards.length > 0) {
         cards.push(...place.cards)
       }
@@ -133,8 +134,8 @@ class Game {
   // }
 
   private findPlace(card: Card): CardPlace {
-    for (var place of this.allPlaces) {
-      let i = place.cards.indexOf(card)
+    for (let place of this.allPlaces) {
+      const i = place.cards.indexOf(card)
       if (i !== -1) {
         return [place, i]
       }
@@ -143,7 +144,7 @@ class Game {
   }
 
   private insertCard(card: Card, to: Place, index: number) {
-    let [oldPlace, oldIndex] = this.findPlace(card)
+    const [oldPlace, oldIndex] = this.findPlace(card)
 
     // if we insert into the same list and the insertion index is
     // after the old index, then need to decrease the insertion
@@ -171,7 +172,7 @@ class Game {
       return
     }
 
-    var card
+    let card
     if (index === -1 || index >= from.cards.length) {
       card = from.cards.splice(-1, 1)[0]
     } else {
@@ -196,7 +197,7 @@ class Game {
   public addPlace(place: Place | Place[]): Game {
     // TODO assert that place.name is unique??
     if (Array.isArray(place)) {
-      for (var p of place) {
+      for (let p of place) {
         this.addPlaceInternal(p)
       }
     } else {
@@ -213,7 +214,7 @@ class Game {
   public addCard(card: Card | Card[], to: Place, index: number = -1): Game {
     // TODO assert that card.name is unique??
     if (Array.isArray(card)) {
-      for (var c of card) {
+      for (let c of card) {
         this.addCardInternal(c, to, index)
       }
     } else {
@@ -238,9 +239,9 @@ class Game {
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
   public moveCards(cardName: CardName, toName: PlaceName, count: number = -1, toIndex: Index = -1): Game {
-    let cards: Card[] = this.filterCards(cardName)
-    let tos: Place[] = this.filterPlaces(toName)
-    let toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
+    const cards: Card[] = this.filterCards(cardName)
+    const tos: Place[] = this.filterPlaces(toName)
+    const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
     if (count === -1) {
       count = cards.length
@@ -249,8 +250,8 @@ class Game {
     }
 
     // TODO what if there is a limit on the number of cards at the destination
-    var iTo = 0, iToIndex = 0
-    for (var card of cards) {
+    let iTo = 0, iToIndex = 0
+    for (let card of cards) {
       this.insertCard(card, tos[iTo], toIndices[iToIndex])
 
       // iterate over the 'tos' first, then the 'toIndices'
@@ -266,13 +267,13 @@ class Game {
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
   public move(fromName: PlaceName, toName: PlaceName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): Game {
-    let froms: Place[] = this.filterPlaces(fromName)
-    let tos: Place[] = this.filterPlaces(toName)
-    let fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
-    let toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
+    const froms: Place[] = this.filterPlaces(fromName)
+    const tos: Place[] = this.filterPlaces(toName)
+    const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
+    const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
     let cardCount = 0
-    for (var from of froms) {
+    for (let from of froms) {
       cardCount += from.cards.length
     }
 
@@ -283,14 +284,14 @@ class Game {
     // restrict the count to the number of available cards
     count = Math.min(count, cardCount)
 
-    var iFrom = 0, iFromIndex = 0
-    var iTo = 0, iToIndex = 0
-    var card
+    let iFrom = 0, iFromIndex = 0
+    let iTo = 0, iToIndex = 0
+    let card
 
     do {
       // if we try to remove and insert from within a place, then the
       // indices will not be correct (because we are changing the cards)
-      assert(froms[iFrom] !== tos[iTo] ||
+      Util.assert(froms[iFrom] !== tos[iTo] ||
          ((fromIndices[iFromIndex] === 0 || fromIndices[iFromIndex] === -1) &&
          (toIndices[iToIndex] === 0 || toIndices[iToIndex] === -1)))
 
@@ -321,10 +322,10 @@ class Game {
   }
 
   public shuffle(place: PlaceName): Game {
-    let placeNames = Array.isArray(place) ? place : [place]
+    const placeNames = Array.isArray(place) ? place : [place]
 
-    for (var name of placeNames) {
-      let ps = this.filterPlaces(name)
+    for (let name of placeNames) {
+      const ps = this.filterPlaces(name)
       if (ps.length > 0) {
         Util.fisherYates(ps[0].cards)
       }
@@ -333,10 +334,10 @@ class Game {
   }
 
   public reverse(place: PlaceName): Game {
-    let placeNames = Array.isArray(place) ? place : [place]
+    const placeNames = Array.isArray(place) ? place : [place]
 
-    for (var name of placeNames) {
-      let ps = this.filterPlaces(name)
+    for (let name of placeNames) {
+      const ps = this.filterPlaces(name)
       if (ps.length > 0) {
         ps[0].cards.reverse()
       }
@@ -345,12 +346,12 @@ class Game {
   }
 
   public roll(place: PlaceName): Game {
-    let placeNames = Array.isArray(place) ? place : [place]
+    const placeNames = Array.isArray(place) ? place : [place]
 
-    for (var name of placeNames) {
-      let ps = this.filterPlaces(name)
+    for (let name of placeNames) {
+      const ps = this.filterPlaces(name)
       if (ps.length > 0) {
-        for (var card of ps[0].cards) {
+        for (let card of ps[0].cards) {
           let dice = card as Dice
           if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
             dice.value = dice.faces[Util.randomInt(0, dice.faces.length)]
@@ -363,32 +364,35 @@ class Game {
   }
 
   public toString(): string {
-    var str = `CARDS (${this.allCards.length}) = ${this.allCards.map(c => c.name).join(',')}\n`
-    for (var place of this.allPlaces) {
+    let str = `CARDS (${this.allCards.length}) = ${this.allCards.map(c => c.name).join(',')}\n`
+    for (let place of this.allPlaces) {
       str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => c.name).join(',')}\n`
     }
     return str
   }
 
   public pick(who, options, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand({type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)})
+    return this.onCommand(this, {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
   public pickCards(who, cards, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand({type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)})
+    return this.onCommand(this, {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
-  public pickPlaces(who, locations, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand({type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)})
+  public pickPlaces(who, locations, count: PickCount = 1, condition?: PickCondition) {
+    // const result = this.onCommand(this, {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)})
+    // this.history.push(result)
+    // return result
+    return {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
   public pickPlayers(who, players, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand({type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)})
+    return this.onCommand(this, {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
   // could we just use pick instead?
   public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand({type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)})
+    return this.onCommand(this, {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)})
   }
 
   public validateResult(result: any[]) {
@@ -405,7 +409,7 @@ class Game {
       throw new Error('original command is not the first element of the result')
     }
 
-    for (var i = 1; i < result.length; ++i) {
+    for (let i = 1; i < result.length; ++i) {
       if (command.options.indexOf(result[i]) === -1) {
         throw new Error('the result contains options which were not in the original command')
       }

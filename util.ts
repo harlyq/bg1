@@ -1,4 +1,11 @@
 class Util {
+  public static assert(cond, msg = "assert failed") {
+    if (!cond) {
+      debugger
+      throw new Error(msg)
+    }
+  }
+
   public static swapElements<T>(list: T[], i: number, j: number): T[] {
     let t = list[i]
     list[i] = list[j]
