@@ -1,4 +1,4 @@
-class Util {
+export default class Util {
   public static assert(cond, msg = "assert failed") {
     if (!cond) {
       debugger
@@ -91,5 +91,3 @@ class Util {
     }
   }
 }
-
-export = Util

@@ -1,6 +1,6 @@
-let Tape = require('Tape')
-let Game = require('./game.js')
-let Util = require('./util.js')
+import * as Tape from 'Tape'
+import Game from './game.js'
+import Util from './util.js'
 
 Tape.test('add player', (test) => {
   let g = new Game()

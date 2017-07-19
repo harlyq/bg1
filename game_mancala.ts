@@ -1,6 +1,6 @@
-let game = require('./game.js')
-let util = require('./util.js')
-let chain = require('./chain.js')
+import Game from './Game.js'
+import Util from './Util.js'
+import Chain from './Chain.js'
 
 const playerPits = {
   a: ['a1','a2','a3','a4','a5','a6'],
@@ -12,8 +12,8 @@ const pitNames = [...playerPits.a, playerBase.a, ...playerPits.b, playerBase.b]
 const pitCounts = [4,4,4,4,4,4,0,4,4,4,4,4,4,0]
 
 const pitChain = {
-  a: new chain([...playerPits.a, playerBase.a, ...playerPits.b]),
-  b: new chain([...playerPits.b, playerBase.b, ...playerPits.a])
+  a: new Chain([...playerPits.a, playerBase.a, ...playerPits.b]),
+  b: new Chain([...playerPits.b, playerBase.b, ...playerPits.a])
 }
 
 function setup(g: Game) {
@@ -45,7 +45,7 @@ function* rules() {
   if (g.options.debug) {
     console.log(g.toString())
     console.log(winResult)
-    util.quit()
+    Util.quit()
   }
 }
 
@@ -147,10 +147,10 @@ function findWinner(g: Game): string {
 
 // TODO move the play logic some
 let playerClient = {
-  'a': game.monteCarloClient(5, 100),
-  'b': game.randomClient() //game.monteCarloClient(10, 1000) // game.consoleClient()
+  'a': Game.monteCarloClient(5, 100),
+  'b': Game.randomClient() //Game.monteCarloClient(10, 1000) // Game.consoleClient()
 }
-game.play(setup, rules, getScore, playerClient)
+Game.play(setup, rules, getScore, playerClient)
 
 
-util.quitOnCtrlBreak()
+Util.quitOnCtrlBreak()

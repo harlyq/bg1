@@ -1,6 +1,6 @@
-let Util = require('./Util.js')
-let Chain = require('./Chain.js')
-let readlineSync = require('readline-sync')
+import Util from './Util.js'
+import Chain from './Chain.js'
+import * as ReadlineSync from 'readline-sync'
 
 interface Player {
   name: string
@@ -47,7 +47,7 @@ interface Named {
   name: string
 }
 
-class Game {
+export default class Game {
   allCards: Card[] = []
   allPlaces: Place[] = []
   allPlayers: Player[] = []
@@ -55,23 +55,27 @@ class Game {
   allValues: {[key: string]: any} = {}
   history: any[] = []
   uniqueId: number = 0
-  options: object = {}
+  options: {debug: boolean} = {debug: false}
   setupFn: (Game) => void
   rules: any
   playerChain = new Chain()
 
-  constructor(setupFn: (Game) => void, rules, playerNames: string[], options?: object) {
+  constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: object) {
     this.setupFn = setupFn
     this.rules = rules
 
     // TODO where is the best place to do this?
-    playerNames.forEach(x => this.addPlayer({name: x}))
+    if (Array.isArray(playerNames)) {
+      playerNames.forEach(x => this.addPlayer({name: x}))
+    }
 
     if (options) {
       this.options = JSON.parse(JSON.stringify(options))
     }
 
-    setupFn(this)
+    if (setupFn) {
+      setupFn(this)
+    }
   }
 
   public getHistory(): any[] {
@@ -447,7 +451,7 @@ class Game {
 
   public static consoleClient() {
     return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
-      let selected = readlineSync.keyInSelect(command.options, 'Which option? ')
+      let selected = ReadlineSync.keyInSelect(command.options, 'Which option? ')
 
       if (selected === -1) {
         Util.quit()
@@ -594,5 +598,3 @@ class Game {
   }
 
 }
-
-export = Game

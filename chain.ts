@@ -1,11 +1,11 @@
-let Util = require('./util.js')
+import Util from './util.js'
 
 class Item {
   data: any
   valid: boolean = true
 }
 
-class Chain {
+export default class Chain {
   items: Item[]
 
   // TODO support looping and ending
@@ -100,5 +100,3 @@ class Chain {
     }
   }
 }
-
-export = Chain

@@ -1,7 +1,7 @@
-let tape = require('tape')
-let Chain = require('./chain.js')
+import * as Tape from 'tape'
+import Chain from './chain.js'
 
-tape('test length', t => {
+Tape('test length', t => {
   let chain1 = new Chain()
   let chain2 = new Chain(['a','b','c'])
 
@@ -11,7 +11,7 @@ tape('test length', t => {
   t.end()
 })
 
-tape('test prev/next in loop', t => {
+Tape('test prev/next in loop', t => {
   let c = new Chain(['a','b','c'])
 
   let x = 'a'
@@ -33,7 +33,7 @@ tape('test prev/next in loop', t => {
   t.end()
 })
 
-tape('test prev/next with add/remove', t => {
+Tape('test prev/next with add/remove', t => {
   let c = new Chain(['a','b','c'])
 
   let x = 'a'
@@ -71,7 +71,7 @@ tape('test prev/next with add/remove', t => {
   t.end()
 })
 
-tape('test random', t => {
+Tape('test random', t => {
   let c = new Chain([0,1,2,3,4,5,6,7,8,9])
 
   let n = c.getLength()*10
