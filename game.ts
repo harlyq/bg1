@@ -1,4 +1,6 @@
-let Util = require('./util.js')
+let Util = require('./Util.js')
+let Chain = require('./Chain.js')
+let readlineSync = require('readline-sync')
 
 interface Player {
   name: string
@@ -40,7 +42,6 @@ type CardName = string | [string] | CardFilterFn
 type PlaceName = string | [string] | PlaceFilterFn
 type PlayerName = string | [string] | PlayerFilterFn
 type Index = number | [number]
-type CommandFn = (Game, command: PickCommand) => Promise<{}>
 
 interface Named {
   name: string
@@ -52,12 +53,25 @@ class Game {
   allPlayers: Player[] = []
   registeredConditions: PickCondition[] = []
   allValues: {[key: string]: any} = {}
-  onCommand: CommandFn // commands or just use pick?
   history: any[] = []
   uniqueId: number = 0
+  options: object = {}
+  setupFn: (Game) => void
+  rules: any
+  playerChain = new Chain()
 
-  constructor(onCommandFn?: CommandFn) {
-    this.onCommand = onCommandFn
+  constructor(setupFn: (Game) => void, rules, playerNames: string[], options?: object) {
+    this.setupFn = setupFn
+    this.rules = rules
+
+    // TODO where is the best place to do this?
+    playerNames.forEach(x => this.addPlayer({name: x}))
+
+    if (options) {
+      this.options = JSON.parse(JSON.stringify(options))
+    }
+
+    setupFn(this)
   }
 
   public getHistory(): any[] {
@@ -184,6 +198,7 @@ class Game {
   public addPlayer(player: Player): Game {
     // TODO assert that player.name is unique??
     this.allPlayers.push(player)
+    this.playerChain.add(player.name)
     return this
   }
 
@@ -371,28 +386,25 @@ class Game {
     return str
   }
 
-  public pick(who, options, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand(this, {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)})
+  public pick(who, options, count: PickCount = 1, condition?: PickCondition) {
+    return {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
-  public pickCards(who, cards, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand(this, {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)})
+  public pickCards(who, cards, count: PickCount = 1, condition?: PickCondition) {
+    return {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
   public pickPlaces(who, locations, count: PickCount = 1, condition?: PickCondition) {
-    // const result = this.onCommand(this, {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)})
-    // this.history.push(result)
-    // return result
     return {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
-  public pickPlayers(who, players, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand(this, {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)})
+  public pickPlayers(who, players, count: PickCount = 1, condition?: PickCondition) {
+    return {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
   // could we just use pick instead?
-  public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition): Promise<{}> {
-    return this.onCommand(this, {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)})
+  public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition) {
+    return {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
   public validateResult(result: any[]) {
@@ -418,6 +430,169 @@ class Game {
     // TODO validate the number of results against the count
     // TODO recursively validate the options (as they may be further commands)
   }
+
+  public static play(setup, rules, scoreFn, playerClient) {
+    let g = new Game(setup, rules, Object.keys(playerClient), {debug: true})
+
+    let itr = rules()
+    itr.next()
+    let result = itr.next(g)
+
+    while (!result.done) {
+      // TODO support multiple options
+      let bestOption = playerClient[result.value.who](g, result.value, scoreFn)
+      result = itr.next([result.value.id, bestOption])
+    }
+  }
+
+  public static consoleClient() {
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
+      let selected = readlineSync.keyInSelect(command.options, 'Which option? ')
+
+      if (selected === -1) {
+        Util.quit()
+      }
+
+      return selected
+    }
+  }
+
+  // TODO separate this random from the games random (maybe have a random in game)
+  public static randomClient() {
+
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): number {
+      return Util.randomInt(0, command.options.length)
+    }
+  }
+
+  public static bruteForceClient(depth: number): any {
+
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
+      let scores = Game.exhaustiveScoreOptions(g, command.id, command.options, command.who, scoreFn, depth)
+
+      // once all of the options have been tried pick the best
+      Util.fisherYates(scores) // shuffle so we don't always pick the first option if the scores are the same
+      scores.sort((a,b) => b.score - a.score) // sort by highest score
+      return scores[0].optionIndex
+    }
+  }
+
+  // TODO depth may be better as a number of rounds, rather than a number of questions
+  public static monteCarloClient(depth: number, iterations: number): any {
+
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
+      let n = command.options.length
+      let totals = Array(n).fill(0)
+
+      for (let k = 0; k < n*iterations; ++k) { // multiply by n, so we also do each option at least once
+        let {trial, trialItr, trialResult} = Game.createTrial(g)
+        let candidates = []
+
+        // each loop we will reuse more (startDepth) old values from
+        // the last best iteration
+        for (let j = 0; j < depth && !trialResult.done; ++j) {
+          // TODO need to handle multiple return options
+          // NOTE j === 0 is used to ensure we iterate over each choice in the options
+          const choice = (j === 0) ? (k % n) : (Util.randomInt(0, command.options.length))
+          const reply = [trialResult.value.id, choice]
+          candidates.push(reply)
+          trialResult = trialItr.next(reply)
+        }
+
+        const firstOption = candidates[0][1]
+
+        // find our score relative to the best opponent score
+        let trialScore = Game.getRelativeScore(trial, command.who, scoreFn)
+
+        totals[firstOption] += trialScore
+      }
+
+      // each option has been trialled the same number of times, so take the
+      // option with the best overall score
+      let bestOption = Util.maxIndex(totals)
+      return bestOption
+    }
+  }
+
+  private static findAverageScore(scores: {optionIndex: number, score: number}[]): number {
+    let scoreTotal = scores.reduce((t,x) => t + x.score, 0)
+    return scoreTotal/scores.length
+  }
+
+  private static findBestScore(scores: {optionIndex: number, score: number}[]): number {
+    return scores.reduce((m, x) => Math.max(m, x.score), scores[0].score)
+  }
+
+  // we build a new game, and play the replay through that game
+  // once the replay is ended try a new option
+  private static createTrial(g): {trial: any, trialItr: any, trialResult: any} {
+    // TODO should place and card be internal constructs of the game, and all
+    // custom data must be managed through allValues?
+    // TODO ugly
+    let trial = new Game(g.setupFn, g.rules, g.playerChain.toArray()) // TODO to save space, should we share the cards?
+
+    let trialItr = g.rules()
+    let trialResult = trialItr.next()
+    trialResult = trialItr.next(trial)
+
+    // run through the playback results
+    let replayIndex = 0
+    while (!trialResult.done && g.history[replayIndex]) {
+      trialResult = trialItr.next(g.history[replayIndex++])
+    }
+
+    return {trial, trialItr, trialResult}
+  }
+
+  private static getRelativeScore(g: Game, player: string, scoreFn: (Game, string) => number): number {
+    // find our score relative to the best opponent score
+    let relativeScore = scoreFn(g, player)
+
+    const opponents = g.playerChain.toArray([player])
+    if (opponents.length > 0) {
+      let bestScore = scoreFn(g, opponents[0])
+      for (var i = 1; i < opponents.length; ++i) {
+        bestScore = Math.max(bestScore, scoreFn(g, opponents[i]))
+      }
+      relativeScore -= bestScore
+    }
+
+    return relativeScore
+  }
+
+  private static exhaustiveScoreOptions(g: Game, id: number, options: any[], player: string, scoreFn: (Game, string) => number, depth: number): {optionIndex: number, score: number}[] {
+    let opponent = g.playerChain.next(player) // TODO loop over all players
+    let scores = []
+
+    options.forEach((option, i) => {
+      let {trial, trialItr, trialResult} = Game.createTrial(g)
+
+      // try this option
+      if (!trialResult.done) {
+        trialResult = trialItr.next([id, i])
+      }
+
+      // either get scores by running further trials, or get the score from
+      // this trial
+      if (!trialResult.done && depth > 1) {
+        let subScores = Game.exhaustiveScoreOptions(trial, trialResult.value.id, trialResult.value.options, trialResult.value.who, scoreFn, depth - 1)
+        // TODO is it better to use the median score? or the lowest score? or the higest score?
+        // should we score the ai player differently from their opponent?
+        scores.push({optionIndex: i, score: Game.findBestScore(subScores)})
+
+        // if (trialResult.value.who === player) {
+        //   scores.push({optionIndex: i, score: findBestScore(subScores)})
+        // } else {
+        //   scores.push({optionIndex: i, score: findAverageScore(subScores)})
+        // }
+      } else {
+        scores.push({optionIndex: i, score: scoreFn(trial, player) - scoreFn(trial, opponent)})
+      }
+    })
+
+    return scores
+  }
+
 }
 
 export = Game

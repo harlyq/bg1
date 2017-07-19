@@ -6,6 +6,22 @@ class Util {
     }
   }
 
+  public static maxIndex<T>(list: T[]): number {
+    let n = list.length
+    if (n === 0) {
+      return -1
+    }
+
+    let maxIndex = 0
+    for (var i = 1; i < n; ++i) {
+      if (list[i] > list[maxIndex]) {
+        maxIndex = i
+      }
+    }
+
+    return maxIndex
+  }
+
   public static swapElements<T>(list: T[], i: number, j: number): T[] {
     let t = list[i]
     list[i] = list[j]

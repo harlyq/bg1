@@ -15,7 +15,6 @@ class Chain {
 
   public copy(oldChain: Chain): Chain {
     var newChain = new Chain(oldChain.items)
-    // newChain.items.concat(...oldChain.items)
     return newChain
   }
 
@@ -57,8 +56,10 @@ class Chain {
     return this.items.reduce((l, x) => l += (x.valid) ? 1 : 0, 0)
   }
 
-  public toArray(): any[] {
-    return this.items.filter(x => x.valid)
+  public toArray(excludeList: any[]): any[] {
+    return this.items.filter(x => {
+      return x.valid && (!Array.isArray(excludeList) || excludeList.indexOf(x.data) === -1)
+    }).map(x => x.data)
   }
 
   public remove(v: any) {
@@ -84,38 +85,6 @@ class Chain {
       this.items.push({data: v, valid: true})
     }
   }
-
-  // doesn't make sense to push.  if 'a' is already in the list
-  // we can't push('a') again
-  // public push(v: any) {
-  //   this.items.push({data: v, valid: true})
-  // }
-  //
-  // public pop(): any {
-  //   let n = this.items.length
-  //   for (var i = n - 1; i >= 0; --i) {
-  //     let item = this.items[i]
-  //     if (item.valid) {
-  //       item.valid = false
-  //       return item.data
-  //     }
-  //   }
-  // }
-
-  // we can provide range through an external function
-  // e.g. newChain(range(x,y))
-  // // range(x) gives [0..x-1]
-  // // range(x,y) gives [x..y]
-  // public range(x: number, y?: number) {
-  //   let isXY = typeof y !== 'undefined'
-  //   var a = isXY ? x : 0
-  //   var b = isXY ? y : x - 1
-  //
-  //   this.items = []
-  //   for (var i = a; i < b; ++i) {
-  //     this.items.push({data: i, valid: true})
-  //   }
-  // }
 
   public random(): any {
     let validItems = this.items.filter(x => x.valid)

@@ -11,5 +11,7 @@
   "devDependencies": {
     "tape": "^4.7.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "readline-sync": "^1.4.7"
+  }
 }
