@@ -97,25 +97,27 @@ function* round(g: Game, player: string) {
   do {
     // once min score is reached player can end their turn
     if (score >= MIN_SCORE) {
-      if (g.options.debug) {
-        console.log(`*** Player ${player} has the minimum score ***`)
-        debugger
-      }
+      g.debugLog(`*** Player ${player} meets the minimum score with ${score} ***`)
       let result = yield g.pick(player, [END_TURN, ROLL])
       endTurn = (result[0] === END_TURN) // easier if we just get results back
     }
 
     if (!endTurn) {
+      // if all cards were used for scoring, then move them all back
+      // into the hand
+      if (g.getCardCount('hand') === 0) {
+        g.debugLog(`*** Player ${player} gets all dice back ***`)
+        g.moveCards(card => card.type === 'greedDie', 'hand', 6)
+      }
+
       g.roll('hand')
+      g.debugLog(`*** Player ${player} rolls ***`)
 
       // need to be able to select 0 cards
       const n = g.getCardCount('hand')
       let scorePicks = yield g.pickCards(player, g.getCardNames('hand'), [1, n], validScoreCondition)
       if (scorePicks.length === 0) {
-        if (g.options.debug) {
-          console.log(`*** Player ${player} failed to score ***`)
-          debugger
-        }
+        g.debugLog(`*** Player ${player} failed to score ***`)
         score = 0 // score nothing this round
         endTurn = true
       } else {
@@ -127,12 +129,8 @@ function* round(g: Game, player: string) {
   } while (!endTurn)
 
   if (score > 0) {
-    if (g.options.debug) {
-      console.log(`*** Player ${player} scored ${score} ***`)
-      debugger
-    }
-
-    g.addValue(`${player}_score`, score)
+    const newScore = g.addValue(`${player}_score`, score)
+    g.debugLog(`*** Player ${player} scored ${score}, now at ${newScore} ***`)
   }
 }
 
@@ -152,7 +150,7 @@ function* rules() {
 
   if (g.options.debug) {
     const winningScore = g.getValue(`${winner}_score`)
-    console.log(`*** Player ${winner} wins, with a score of ${winningScore}`)
+    g.debugLog(`*** Player ${winner} wins, with a score of ${winningScore}`)
     Util.quit()
   }
 }
@@ -170,8 +168,8 @@ function getScore(g: Game, player: string) {
 }
 
 let playerClients = {
-  'a': Game.monteCarloClient(2,1),
-  'b': Game.randomClient()
+  'a': Game.monteCarloClient(5,10),
+  'b': Game.consoleClient() // Game.randomClient()
 }
 
 Game.play(setup, rules, getScore, playerClients)

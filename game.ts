@@ -89,6 +89,13 @@ export default class Game {
     }
   }
 
+  public debugLog(msg) {
+    if (this.options.debug) {
+      console.log(msg)
+      debugger
+    }
+  }
+
   // returns integer in the range (min, max]
   private randomInt(min: number, max: number): number {
     return Math.floor(this.random.random()*(max - min) + min)
@@ -414,7 +421,7 @@ export default class Game {
   public toString(): string {
     let str = `CARDS (${this.allCards.length}) = ${this.allCards.map(c => c.name).join(',')}\n`
     for (let place of this.allPlaces) {
-      str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => c.name).join(',')}\n`
+      str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => c.name + (c.value ? `[${c.value.toString()}]` : '')).join(',')}\n`
     }
     return str
   }
@@ -496,15 +503,45 @@ export default class Game {
   }
 
   public static consoleClient() {
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
-      let selected = ReadlineSync.keyInSelect(command.options, 'Which option? ')
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[][] {
+      const count = Game.parseCount(command.count)
+      const conditionFn = command.condition >= 0 ? g.registeredConditions[command.condition] : null
 
-      if (selected === -1) {
-        Util.quit()
+      console.log(g.toString())
+      if (count[0] === count[1]) {
+        console.log(`Choose ${count[0]}`)
+      } else {
+        console.log(`Choose between ${count[0]} and ${count[1]}`)
       }
 
-      // TODO support multiple selections
-      return [command.options[selected]]
+      let choices = []
+      let hasValidChoice = false
+
+      while (!hasValidChoice) {
+        let selected
+        let options = command.options.slice()
+        choices = []
+
+        while (choices.length < count[1] && selected !== -1) {
+          selected = ReadlineSync.keyInSelect(options, 'Which option? ')
+          if (selected !== -1) {
+            choices.push(options[selected])
+            options.splice(selected, 1)
+          }
+        }
+
+        // quitting whithout meeting the minimum
+        if (choices.length < count[0]) {
+          return []
+        }
+
+        hasValidChoice = !conditionFn || conditionFn(g, choices)
+        if (!hasValidChoice) {
+          console.log(`choice ${choices} is invalid`)
+        }
+      }
+
+      return choices
     }
   }
 
@@ -581,12 +618,15 @@ export default class Game {
         let choice
 
         for (let j = 0; j < depth && !trialResult.done; ++j) {
+          choice = []
           if (j === 0) {
             choice = pickCombinations[pickIndex]
           } else {
             const combinations = Game.getValidCombinations(trial, trialResult.value)
-            const randomIndex = Util.randomInt(0, combinations.length)
-            choice = combinations[randomIndex]
+            if (combinations.length > 0) {
+              const randomIndex = Util.randomInt(0, combinations.length)
+              choice = combinations[randomIndex]
+            }
           }
           candidates.push(choice)
           trial.validateResult(trialResult.value, choice)
