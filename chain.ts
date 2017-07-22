@@ -56,10 +56,12 @@ export default class Chain {
     return this.items.reduce((l, x) => l += (x.valid) ? 1 : 0, 0)
   }
 
-  public toArray(excludeList: any[]): any[] {
-    return this.items.filter(x => {
-      return x.valid && (!Array.isArray(excludeList) || excludeList.indexOf(x.data) === -1)
-    }).map(x => x.data)
+  public toArray(excludeList?: any[]): any[] {
+    if (Array.isArray(excludeList)) {
+      return this.items.filter(x => x.valid && excludeList.indexOf(x.data) === -1).map(x => x.data)
+    } else {
+      return this.items.filter(x => x.valid).map(x => x.data)
+    }
   }
 
   public remove(v: any) {

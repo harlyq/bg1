@@ -1,6 +1,6 @@
-import Game from './Game.js'
-import Util from './Util.js'
-import Chain from './Chain.js'
+import Game from './game.js'
+import Util from './util.js'
+import Chain from './chain.js'
 
 const playerPits = {
   a: ['a1','a2','a3','a4','a5','a6'],
@@ -34,7 +34,7 @@ function setup(g: Game) {
 function* rules() {
   let g = yield // get the reference to the Game structure
 
-  let player = 'a'
+  let player: string = 'a'
   let winResult
 
   while (!winResult) {
@@ -51,15 +51,14 @@ function* rules() {
 
 function* turn(g: Game, player: string) {
   const validPlaces = g.filterPlaces(p => p.cards.length > 0 && playerPits[player].indexOf(p.name) >= 0).map(p => p.name)
-  const result = yield g.pickPlaces(player, validPlaces)
-  g.history.push(result) // TODO do this automatically within the pick
+  const result: string[] = yield g.pickPlaces(player, validPlaces)
 
   if (g.options.debug) {
-    console.log(`*** ${player} plays ${validPlaces[result[1]]} ***`)
+    console.log(`*** ${player} plays ${result[0]} ***`)
   }
   //g.validateResult(result)
 
-  player = moveStones(g, player, validPlaces[result[1]])
+  player = moveStones(g, player, result[0])
 
   if (g.options.debug) {
     console.log(g.toString())
@@ -69,7 +68,7 @@ function* turn(g: Game, player: string) {
 }
 
 function moveStones(g: Game, player: string, pitName: string): string {
-  const stones = g.getCards(pitName).map(c => c.name) // TODO awkard syntax
+  const stones = g.getCardNames(pitName)
   let nextPit = pitName
 
   while (stones.length > 0) {
@@ -81,13 +80,13 @@ function moveStones(g: Game, player: string, pitName: string): string {
 
   // if last stone is the only stone in that pit, and the pit is on my
   // side, then claim the opponents stones in the opposite pit
-  if (g.getCards(nextPit).length === 1) {
+  if (g.getCardCount(nextPit) === 1) {
     const i = playerPits[player].indexOf(nextPit)
     if (i >= 0) {
       const n = playerPits[player].length
       const oppositePit = playerPits[opponent][n - 1 - i]
 
-      if (g.getCards(oppositePit).length > 0) {
+      if (g.getCardCount(oppositePit) > 0) {
         if (g.options.debug) {
           console.log(`*** claim opponent ${oppositePit} ***`)
         }
@@ -99,13 +98,13 @@ function moveStones(g: Game, player: string, pitName: string): string {
 
   // if all pits are empty for a player, then move all the opponent's stones
   // to their home base
-  if (playerPits[player].every(p => g.getCards(p).length === 0)) {
+  if (playerPits[player].every(p => g.getCardCount(p) === 0)) {
     g.move(playerPits[opponent], playerBase[opponent], -1) // TODO functions need to complain when the parameters are incorrect
 
     if (g.options.debug) {
       console.log(`*** ${opponent} gains remaining ***`)
     }
-  } else if (playerPits[opponent].every(p => g.getCards(p).length === 0)) {
+  } else if (playerPits[opponent].every(p => g.getCardCount(p) === 0)) {
     g.move(playerPits[player], playerBase[player], -1)
 
     if (g.options.debug) {
@@ -127,12 +126,12 @@ function moveStones(g: Game, player: string, pitName: string): string {
 
 // higher is better
 function getScore(g: Game, player): number {
-  return g.getCards(playerBase[player]).length
+  return g.getCardCount(playerBase[player])
 }
 
 // TODO handle a draw
 function findWinner(g: Game): string {
-  if (allPlayerPits.every(name => g.getCards(name).length === 0)) {
+  if (allPlayerPits.every(name => g.getCardCount(name) === 0)) {
     const scoreA = getScore(g, 'a')
     const scoreB = getScore(g, 'b')
     if (scoreA === scoreB) {
@@ -151,6 +150,5 @@ let playerClient = {
   'b': Game.randomClient() //Game.monteCarloClient(10, 1000) // Game.consoleClient()
 }
 Game.play(setup, rules, getScore, playerClient)
-
 
 Util.quitOnCtrlBreak()

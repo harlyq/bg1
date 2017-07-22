@@ -6,6 +6,137 @@ export default class Util {
     }
   }
 
+  public static clamp(x, min, max) {
+    return Math.max(min, Math.min(max, x))
+  }
+
+  private static _f: number[] = []
+
+  public static factorial(n: number): number {
+    if (n === 0 || n === 1) {
+      return 1
+    } else if (Util._f[n]) {
+      return Util._f[n]
+    } else {
+      let val = 1
+      for (var i = 2; i <= n; ++i) {
+        Util._f[i] = val = val*i
+      }
+      return val
+    }
+  }
+
+  public static combination(n: number, k: number): number {
+    return Util.factorial(n)/(Util.factorial(k)*Util.factorial(n - k))
+  }
+
+  // public static getRandomCombination<T>(list: T[], startCount: number, endCount?: number): T[] {
+  //   if (typeof endCount === 'undefined') {
+  //     endCount = startCount
+  //   }
+  //
+  //   const n = list.length
+  //   let numCombinations = 0
+  //   for (let count = startCount; count <= endCount; ++count) {
+  //     numCombinations += Util.combination(n, count)
+  //   }
+  //
+  //   let randomIndex = Math.floor(Math.random()*numCombinations)
+  // }
+
+  public static getCombinations<T>(list: T[], startCount: number, endCount?: number): T[][] {
+    if (typeof endCount === 'undefined') {
+      endCount = startCount
+    }
+
+    let combinations = []
+    for (let count = startCount; count <= endCount; ++count) {
+      if (count === 0) {
+        combinations.push([])
+      } else {
+        combinations.push(...Util.getCombinationsInternal(list, count))
+      }
+    }
+
+    return combinations
+  }
+
+  private static getCombinationsInternal<T>(list: T[], count: number, lastCombo: T[] = [], nextIndex = 0): T[][] {
+    if (count === 0) {
+      return []
+    }
+
+    let choices = []
+    let n = list.length
+
+    for (let i = nextIndex; i <= n - count; ++i) {
+      let newCombo: T[] = lastCombo.slice()
+      newCombo.push(list[i])
+
+      if (count > 1) {
+        let subChoices = Util.getCombinationsInternal(list, count - 1, newCombo, i + 1)
+        choices.push(...subChoices)
+      } else {
+        choices.push(newCombo)
+      }
+    }
+
+    return choices
+  }
+
+  // returns a map by keyFn of the list of instances with a matching keyFn
+  public static makeBuckets<T>(list: T[], keyFn: (T) => string): {[key: string]: T} {
+    let buckets = list.reduce((buckets, x) => {
+      const key = keyFn(x)
+      if (typeof buckets[key] === 'undefined') {
+        buckets[key] = []
+      }
+      buckets[key].push(x)
+      return buckets
+    }, {})
+    return buckets
+  }
+
+  // returns a map by keyFn of the number of instances with a matching keyFn
+  public static countBuckets<T>(list: T[], keyFn: (T) => string): {[key: string]: number} {
+    let buckets = list.reduce((buckets, x) => {
+      const key = keyFn(x)
+      buckets[key] = (buckets[key] || 0) + 1
+      return buckets
+    }, {})
+    return buckets
+  }
+
+  // matches against the first level of
+  public static isEqual(a: any, b: any): boolean {
+    if (typeof a === typeof b) {
+      if (Array.isArray(a)) {
+        const n = a.length
+        if (n === b.length) {
+          for (let i = 0; i < n; ++i) {
+            if (a[i] !== b[i]) {
+              return false
+            }
+          }
+          return true
+        }
+      } else if (typeof a === 'object') {
+        if (Object.keys(a).length === Object.keys(b).length) {
+          for (let key in a) {
+            if (a[key] !== b[key]) {
+              return false
+            }
+          }
+          return true
+        }
+      } else {
+        return a === b
+      }
+    }
+
+    return false
+  }
+
   public static maxIndex<T>(list: T[]): number {
     let n = list.length
     if (n === 0) {

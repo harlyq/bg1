@@ -1,6 +1,7 @@
-import Util from './Util.js'
-import Chain from './Chain.js'
+import Util from './util.js'
+import Chain from './chain.js'
 import * as ReadlineSync from 'readline-sync'
+import * as MersenneTwister from 'mersenne-twister' // HACK not a module
 
 interface Player {
   name: string
@@ -8,6 +9,7 @@ interface Player {
 
 interface Card {
   name: string
+  [others: string]: any
 }
 
 interface Dice extends Card {
@@ -18,19 +20,20 @@ interface Dice extends Card {
 interface Place {
   name: string
   cards?: Card[]
+  [others: string]: any
 }
 
 type CardPlace = [Place, number]
 
 type PickCount = number | number[]
 
-type PickCondition = (any) => boolean
+type PickCondition = (g: Game, list: any[]) => boolean
 
 interface PickCommand {
   id: number // starts from 0
   type: string
   who: string
-  options: any[]
+  options: string[]
   count: PickCount
   condition?: number
 }
@@ -38,19 +41,23 @@ interface PickCommand {
 type CardFilterFn = (Card) => boolean
 type PlaceFilterFn = (Place) => boolean
 type PlayerFilterFn = (Player) => boolean
-type CardName = string | [string] | CardFilterFn
-type PlaceName = string | [string] | PlaceFilterFn
-type PlayerName = string | [string] | PlayerFilterFn
-type Index = number | [number]
+type CardName = string | string[] | CardFilterFn
+type PlaceName = string | string[] | PlaceFilterFn
+type PlayerName = string | string[] | PlayerFilterFn
+type Index = number | number[]
 
 interface Named {
   name: string
 }
 
+interface GameOptions {
+  debug?: boolean
+}
+
 export default class Game {
-  allCards: Card[] = []
-  allPlaces: Place[] = []
-  allPlayers: Player[] = []
+  allCards: Card[] = [] // should this be a map?
+  allPlaces: Place[] = [] // should this be a map?
+  allPlayers: Player[] = [] // should this be a map?
   registeredConditions: PickCondition[] = []
   allValues: {[key: string]: any} = {}
   history: any[] = []
@@ -59,10 +66,14 @@ export default class Game {
   setupFn: (Game) => void
   rules: any
   playerChain = new Chain()
+  seed: number
+  random
 
-  constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: object) {
+  constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: GameOptions, seed: number = Date.now()) {
     this.setupFn = setupFn
     this.rules = rules
+    this.seed = seed
+    this.random = new MersenneTwister(seed)
 
     // TODO where is the best place to do this?
     if (Array.isArray(playerNames)) {
@@ -76,6 +87,11 @@ export default class Game {
     if (setupFn) {
       setupFn(this)
     }
+  }
+
+  // returns integer in the range (min, max]
+  private randomInt(min: number, max: number): number {
+    return Math.floor(this.random.random()*(max - min) + min)
   }
 
   public getHistory(): any[] {
@@ -102,8 +118,8 @@ export default class Game {
   }
 
   public addValue(name: string, delta: number): any {
-    this.allValues.name = (this.allValues[name] || 0) + delta
-    return this.allValues.name
+    this.allValues[name] = (this.allValues[name] || 0) + delta
+    return this.allValues[name]
   }
 
   public toggleValue(name: string, delta: number): any {
@@ -122,13 +138,26 @@ export default class Game {
 
   public getCards(placeName: PlaceName): Card[] {
     const places: Place[] = Game.getThings(placeName, this.allPlaces)
-    var cards = []
+    let cards = []
     for (let place of places) {
       if (place.cards.length > 0) {
         cards.push(...place.cards)
       }
     }
     return cards
+  }
+
+  public getCardNames(placeName: PlaceName): string[] {
+    return this.getCards(placeName).map(x => x.name)
+  }
+
+  public getCardCount(placeName: PlaceName): number {
+    const places: Place[] = Game.getThings(placeName, this.allPlaces)
+    let length = 0
+    for (let place of places) {
+      length += place.cards.length
+    }
+    return length
   }
 
   public filterPlaces(placeName: PlaceName): Place[] {
@@ -245,7 +274,7 @@ export default class Game {
   // public addDice(dice: Dice | Dice[], to: Place, index: number = -1): Game {
   //   dice = Array.isArray(dice) ? dice : [dice]
   //
-  //   for (var d of dice) {
+  //   for (let d of dice) {
   //     if (Array.isArray(d.faces) && d.faces.length > 0 && d.faces.indexOf(d.value) === -1) {
   //       d.value = d.faces[0] // force value to be one of the faces
   //     }
@@ -344,9 +373,9 @@ export default class Game {
     const placeNames = Array.isArray(place) ? place : [place]
 
     for (let name of placeNames) {
-      const ps = this.filterPlaces(name)
-      if (ps.length > 0) {
-        Util.fisherYates(ps[0].cards)
+      const places = this.filterPlaces(name) // should only have 0 or 1 entries
+      if (places.length > 0) {
+        Util.fisherYates(places[0].cards)
       }
     }
     return this
@@ -356,9 +385,9 @@ export default class Game {
     const placeNames = Array.isArray(place) ? place : [place]
 
     for (let name of placeNames) {
-      const ps = this.filterPlaces(name)
-      if (ps.length > 0) {
-        ps[0].cards.reverse()
+      const places = this.filterPlaces(name) // should have 0 or 1 entries
+      if (places.length > 0) {
+        places[0].cards.reverse()
       }
     }
     return this
@@ -368,12 +397,12 @@ export default class Game {
     const placeNames = Array.isArray(place) ? place : [place]
 
     for (let name of placeNames) {
-      const ps = this.filterPlaces(name)
-      if (ps.length > 0) {
-        for (let card of ps[0].cards) {
+      const places = this.filterPlaces(name)
+      if (places.length > 0) {
+        for (let card of places[0].cards) {
           let dice = card as Dice
           if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
-            dice.value = dice.faces[Util.randomInt(0, dice.faces.length)]
+            dice.value = dice.faces[this.randomInt(0, dice.faces.length)]
           }
         }
       }
@@ -390,53 +419,68 @@ export default class Game {
     return str
   }
 
-  public pick(who, options, count: PickCount = 1, condition?: PickCondition) {
+  public pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition) {
     return {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
-  public pickCards(who, cards, count: PickCount = 1, condition?: PickCondition) {
+  public pickCards(who: string, cards: string[], count: PickCount = 1, condition?: PickCondition) {
     return {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
-  public pickPlaces(who, locations, count: PickCount = 1, condition?: PickCondition) {
+  public pickPlaces(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition) {
     return {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
-  public pickPlayers(who, players, count: PickCount = 1, condition?: PickCondition) {
+  public pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition) {
     return {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)}
   }
 
-  // could we just use pick instead?
-  public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition) {
-    return {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)}
-  }
+  // // could we just use pick instead?
+  // public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition) {
+  //   return {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)}
+  // }
 
-  public validateResult(result: any[]) {
-    if (result instanceof Promise) {
-      throw new Error('missing "await" before pick command')
+  public validateResult(command: PickCommand, result: any[]) {
+    Util.assert(!(result instanceof Promise), 'missing "await" before pick command')
+
+    Util.assert(Array.isArray(result), 'result is not an array')
+
+    for (let i = 0; i < result.length; ++i) {
+      // this may be due to global variables for not using the Game.random() functions
+      Util.assert(command.options.indexOf(result[i]) !== -1, 'the result contains options which were not in the original command')
     }
 
-    if (!Array.isArray(result) || result.length === 0) {
-      throw new Error('result is not an array')
-    }
-
-    let command = result[0] as PickCommand
-    if (!command.options || !Array.isArray(command.options) || command.options.length === 0) {
-      throw new Error('original command is not the first element of the result')
-    }
-
-    for (let i = 1; i < result.length; ++i) {
-      if (command.options.indexOf(result[i]) === -1) {
-        throw new Error('the result contains options which were not in the original command')
-      }
+    if (result.length > 0 && command.condition >= 0) {
+      const conditionFn = this.registeredConditions[command.condition]
+      Util.assert(conditionFn(this, result), 'result does not meet the command conditions')
     }
 
     // TODO validate the number of results against the count
     // TODO recursively validate the options (as they may be further commands)
   }
 
-  public static play(setup, rules, scoreFn, playerClient) {
-    let g = new Game(setup, rules, Object.keys(playerClient), {debug: true})
+  private static parseCount(count: PickCount, countMax?: number): [number, number] {
+    let min = 1, max = 1
+    let countMin = 0
+
+    if (Array.isArray(count)) {
+      if (count.length > 0) {
+        min = Math.min(...count)
+        max = Math.max(...count)
+      }
+    } else if (typeof count === 'number') {
+      min = max = count
+    }
+
+    if (typeof countMax !== 'undefined') {
+      return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
+    } else {
+      return [Math.max(min, countMin), Math.max(max, countMin)]
+    }
+  }
+
+  public static play(setup, rules, scoreFn, playerClients) {
+    let g = new Game(setup, rules, Object.keys(playerClients), {debug: true})
 
     let itr = rules()
     itr.next()
@@ -444,77 +488,123 @@ export default class Game {
 
     while (!result.done) {
       // TODO support multiple options
-      let bestOption = playerClient[result.value.who](g, result.value, scoreFn)
-      result = itr.next([result.value.id, bestOption])
+      const bestOptions = playerClients[result.value.who](g, result.value, scoreFn)
+      g.validateResult(result.value, bestOptions)
+      g.history.push(bestOptions)
+      result = itr.next(bestOptions)
     }
   }
 
   public static consoleClient() {
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
       let selected = ReadlineSync.keyInSelect(command.options, 'Which option? ')
 
       if (selected === -1) {
         Util.quit()
       }
 
-      return selected
+      // TODO support multiple selections
+      return [command.options[selected]]
     }
+  }
+
+  private static getValidCombinations(g: Game, command: PickCommand): string[][] {
+    const n = command.options.length
+    const count = Game.parseCount(command.count, n)
+
+     // TODO think of a way to speed this up when there is no condition
+    // if (command.condition < 0) {
+    //   return Util.getRandomCombination(command.options, count[0], count[1])
+    // }
+
+    let combinations = Util.getCombinations(command.options, count[0], count[1])
+
+    if (command.condition >= 0) {
+      let conditionFn = g.registeredConditions[command.condition]
+      combinations = combinations.filter(x => conditionFn(g, x))
+    }
+
+    return combinations
   }
 
   // TODO separate this random from the games random (maybe have a random in game)
   public static randomClient() {
 
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): number {
-      return Util.randomInt(0, command.options.length)
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+      let combinations = Game.getValidCombinations(g, command)
+      if (combinations.length === 0) {
+        return [] // no options, exit
+      } else {
+        const j = Util.randomInt(0, combinations.length)
+        return combinations[j]
+      }
     }
   }
 
-  public static bruteForceClient(depth: number): any {
-
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
-      let scores = Game.exhaustiveScoreOptions(g, command.id, command.options, command.who, scoreFn, depth)
-
-      // once all of the options have been tried pick the best
-      Util.fisherYates(scores) // shuffle so we don't always pick the first option if the scores are the same
-      scores.sort((a,b) => b.score - a.score) // sort by highest score
-      return scores[0].optionIndex
-    }
-  }
+  // public static bruteForceClient(depth: number): any {
+  //
+  //   return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+  //     let scores = Game.exhaustiveScoreOptions(g, command.id, command.options, command.who, scoreFn, depth)
+  //     let count = Game.parseCount(command.count)
+  //
+  //     // once all of the options have been tried pick the best
+  //     Util.fisherYates(scores) // shuffle so we don't always pick the first option if the scores are the same
+  //     scores.sort((a,b) => b.score - a.score) // sort by highest score
+  //
+  //     const choices = scores.slice(0, count[1]) // always take the max
+  //     return scores[0].optionIndex
+  //   }
+  // }
 
   // TODO depth may be better as a number of rounds, rather than a number of questions
   public static monteCarloClient(depth: number, iterations: number): any {
 
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number) {
-      let n = command.options.length
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+      // this pick combination list will be used at the beginning of all trials
+      const pickCombinations = Game.getValidCombinations(g, command)
+      const n = pickCombinations.length
+
+      if (n === 0) {
+        return [] // no options, exit
+      }
+
       let totals = Array(n).fill(0)
 
-      for (let k = 0; k < n*iterations; ++k) { // multiply by n, so we also do each option at least once
+      // multiply by n to ensure we try each pickCombination the same number
+      // of times
+      for (let k = 0; k < iterations*n; ++k) {
         let {trial, trialItr, trialResult} = Game.createTrial(g)
         let candidates = []
 
-        // each loop we will reuse more (startDepth) old values from
-        // the last best iteration
+        // attempt 'depth' turns of the game
+        let pickIndex = k % n
+        let choice
+
         for (let j = 0; j < depth && !trialResult.done; ++j) {
-          // TODO need to handle multiple return options
-          // NOTE j === 0 is used to ensure we iterate over each choice in the options
-          const choice = (j === 0) ? (k % n) : (Util.randomInt(0, command.options.length))
-          const reply = [trialResult.value.id, choice]
-          candidates.push(reply)
-          trialResult = trialItr.next(reply)
+          if (j === 0) {
+            choice = pickCombinations[pickIndex]
+          } else {
+            const combinations = Game.getValidCombinations(trial, trialResult.value)
+            const randomIndex = Util.randomInt(0, combinations.length)
+            choice = combinations[randomIndex]
+          }
+          candidates.push(choice)
+          trial.validateResult(trialResult.value, choice)
+          trialResult = trialItr.next(choice)
         }
 
-        const firstOption = candidates[0][1]
-
-        // find our score relative to the best opponent score
+        // find our score relative to the best opponent score at the end
+        // of this trial
         let trialScore = Game.getRelativeScore(trial, command.who, scoreFn)
 
-        totals[firstOption] += trialScore
+        totals[pickIndex] += trialScore
       }
 
-      // each option has been trialled the same number of times, so take the
-      // option with the best overall score
-      let bestOption = Util.maxIndex(totals)
-      return bestOption
+      // take the option with the best overall score (all pickCombinations were
+      // trialled the same number of times so we don't need to calculate an
+      // average)
+      const bestPickIndex = Util.maxIndex(totals)
+      return pickCombinations[bestPickIndex]
     }
   }
 
@@ -533,7 +623,7 @@ export default class Game {
     // TODO should place and card be internal constructs of the game, and all
     // custom data must be managed through allValues?
     // TODO ugly
-    let trial = new Game(g.setupFn, g.rules, g.playerChain.toArray()) // TODO to save space, should we share the cards?
+    let trial = new Game(g.setupFn, g.rules, g.playerChain.toArray(), {}, g.seed) // TODO to save space, should we share the cards?
 
     let trialItr = g.rules()
     let trialResult = trialItr.next()
@@ -542,7 +632,10 @@ export default class Game {
     // run through the playback results
     let replayIndex = 0
     while (!trialResult.done && g.history[replayIndex]) {
-      trialResult = trialItr.next(g.history[replayIndex++])
+      let choice = g.history[replayIndex++]
+      trial.history.push(choice)
+      trial.validateResult(trialResult.value, choice)
+      trialResult = trialItr.next(choice)
     }
 
     return {trial, trialItr, trialResult}
@@ -555,7 +648,7 @@ export default class Game {
     const opponents = g.playerChain.toArray([player])
     if (opponents.length > 0) {
       let bestScore = scoreFn(g, opponents[0])
-      for (var i = 1; i < opponents.length; ++i) {
+      for (let i = 1; i < opponents.length; ++i) {
         bestScore = Math.max(bestScore, scoreFn(g, opponents[i]))
       }
       relativeScore -= bestScore

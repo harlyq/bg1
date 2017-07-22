@@ -3,6 +3,7 @@
   "compilerOptions": {
     "removeComments": true,
     "target": "es2015",
-    "module": "commonjs"
+    "module": "commonjs",
+    "allowJs": "true"
   }
 }
