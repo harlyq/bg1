@@ -55,9 +55,9 @@ interface GameOptions {
 }
 
 export default class Game {
-  allCards: Card[] = [] // should this be a map?
-  allPlaces: Place[] = [] // should this be a map?
-  allPlayers: Player[] = [] // should this be a map?
+  allCards: {[name: string]: Card} = {}
+  allPlaces: {[name: string]: Place} = {}
+  allPlayers: {[name: string]: Player} = {}
   registeredConditions: PickCondition[] = []
   allValues: {[key: string]: any} = {}
   history: any[] = []
@@ -105,13 +105,19 @@ export default class Game {
     return this.history
   }
 
-  static getThings<T>(name: string | string[] | ((Named) => boolean), things: (T & Named)[]): (T & Named)[] {
+  static filterThings<T>(name: string | string[] | ((Named) => boolean), things: {[name: string]: T & Named}): (T & Named)[] {
     if (typeof name === 'function') {
-      return things.filter(name)
+      let results = []
+      for (let key in things) {
+        if (name(things[key])) {
+          results.push(things[key])
+        }
+      }
+      return results
     } else if (typeof name === 'string') {
-      return things.filter(x => x.name === name)
+      return [things[name]]
     } else if (Array.isArray(name)) {
-      return name.map(r => things.filter(x => x.name === r)[0]) // matches the order in name
+      return name.map(r => things[r]) // the output is the same order as the input
     }
     return []
   }
@@ -140,11 +146,11 @@ export default class Game {
   }
 
   public filterCards(cardName: CardName): Card[] {
-    return Game.getThings(cardName, this.allCards)
+    return Game.filterThings(cardName, this.allCards)
   }
 
   public getCards(placeName: PlaceName): Card[] {
-    const places: Place[] = Game.getThings(placeName, this.allPlaces)
+    const places: Place[] = Game.filterThings(placeName, this.allPlaces)
     let cards = []
     for (let place of places) {
       if (place.cards.length > 0) {
@@ -159,7 +165,7 @@ export default class Game {
   }
 
   public getCardCount(placeName: PlaceName): number {
-    const places: Place[] = Game.getThings(placeName, this.allPlaces)
+    const places: Place[] = Game.filterThings(placeName, this.allPlaces)
     let length = 0
     for (let place of places) {
       length += place.cards.length
@@ -168,11 +174,11 @@ export default class Game {
   }
 
   public filterPlaces(placeName: PlaceName): Place[] {
-    return Game.getThings(placeName, this.allPlaces)
+    return Game.filterThings(placeName, this.allPlaces)
   }
 
   public filterPlayers(playerName: PlayerName): Player[] {
-    return Game.getThings(playerName, this.allPlayers)
+    return Game.filterThings(playerName, this.allPlayers)
   }
 
   // function insertCard(fromList: any[], from: number, toList: any[], to: number) {
@@ -188,7 +194,8 @@ export default class Game {
   // }
 
   private findPlace(card: Card): CardPlace {
-    for (let place of this.allPlaces) {
+    for (let key in this.allPlaces) {
+      const place = this.allPlaces[key]
       const i = place.cards.indexOf(card)
       if (i !== -1) {
         return [place, i]
@@ -237,13 +244,13 @@ export default class Game {
 
   public addPlayer(player: Player): Game {
     // TODO assert that player.name is unique??
-    this.allPlayers.push(player)
+    this.allPlayers[player.name] = player
     this.playerChain.add(player.name)
     return this
   }
 
   private addPlaceInternal(place: Place) {
-    this.allPlaces.push(place)
+    this.allPlaces[place.name] = place
     if (!Array.isArray(place.cards)) {
       place.cards = []
     }
@@ -263,7 +270,7 @@ export default class Game {
 
   private addCardInternal(card: Card, to: Place, index: number) {
     this.insertCard(card, to, index)
-    this.allCards.push(card)
+    this.allCards[card.name] = card
   }
 
   public addCard(card: Card | Card[], to: Place, index: number = -1): Game {
@@ -419,8 +426,10 @@ export default class Game {
   }
 
   public toString(): string {
-    let str = `CARDS (${this.allCards.length}) = ${this.allCards.map(c => c.name).join(',')}\n`
-    for (let place of this.allPlaces) {
+    const allCards = Object.keys(this.allCards).map(c => this.allCards[c]) // Object.values(this.allCards)
+    let str = `CARDS (${allCards.length}) = ${allCards.map(c => c.name).join(',')}\n`
+    for (let placeName in this.allPlaces) {
+      const place = this.allPlaces[placeName]
       str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => c.name + (c.value ? `[${c.value.toString()}]` : '')).join(',')}\n`
     }
     return str

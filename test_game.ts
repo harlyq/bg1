@@ -127,21 +127,24 @@ Tape.test('test shuffle', (test) => {
   let g = new Game()
   let place1 = {name: 'Place1'}
   let NUM_CARDS = 20
+  let listOfCards = []
 
   g.addPlace(place1)
   for (var i = 0; i < NUM_CARDS; ++i) {
-    g.addCard({name: `Card${i}`}, place1)
+    const card = {name: `Card${i}`}
+    g.addCard(card, place1)
+    listOfCards.push(card)
   }
 
   test.equal(g.getCards('Place1').length, NUM_CARDS, 'all cards added')
   test.ok(Util.isListUnique(g.getCards('Place1')), 'all cards unique')
-  test.deepEqual(g.getCards('Place1'), g.allCards, 'cards are in order')
+  test.deepEqual(g.getCards('Place1'), listOfCards, 'cards are in order')
 
   test.comment('shuffle')
   g.shuffle('Place1')
   test.equal(g.getCards('Place1').length, NUM_CARDS, 'all cards present')
   test.ok(Util.isListUnique(g.getCards('Place1')), 'all cards unique')
-  test.notDeepEqual(g.getCards('Place1'), g.allCards, 'cards are shuffled')
+  test.notDeepEqual(g.getCards('Place1'), listOfCards, 'cards are shuffled')
 
   test.end()
 })
