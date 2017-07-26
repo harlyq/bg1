@@ -20,7 +20,7 @@ interface Dice extends Card {
 interface Place {
   name: string
   value?: any
-  cards?: Card[]
+  cards?: string[]
   [others: string]: any
 }
 
@@ -62,12 +62,23 @@ interface GameOptions {
   debug?: boolean
 }
 
+// must not contain references or classes
+interface GameData {
+  allCards: {[name: string]: Card}
+  allPlaces: {[name: string]: Place}
+  allPlayers: {[name: string]: Player}
+  allValues: {[key: string]: any}
+}
+
 export default class Game {
-  allCards: {[name: string]: Card} = {}
-  allPlaces: {[name: string]: Place} = {}
-  allPlayers: {[name: string]: Player} = {}
+  data: GameData = {
+    allCards: {},
+    allPlaces: {},
+    allPlayers: {},
+    allValues: {}
+  }
+
   registeredConditions: PickCondition[] = []
-  allValues: {[key: string]: any} = {}
   history: any[] = []
   uniqueId: number = 0
   options: {debug: boolean} = {debug: false}
@@ -76,6 +87,7 @@ export default class Game {
   playerChain = new Chain()
   seed: number
   private random: MersenneTwister
+  cacheFindPlace: Place
 
   constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: GameOptions, seed: number = Date.now()) {
     this.setupFn = setupFn
@@ -89,7 +101,7 @@ export default class Game {
     }
 
     if (options) {
-      this.options = JSON.parse(JSON.stringify(options))
+      this.options = Util.copyJSON(options)
     }
 
     if (setupFn) {
@@ -97,49 +109,14 @@ export default class Game {
     }
   }
 
-  private static copyCards(src, dst = {}): any {
-    for (let card in src) {
-      if (src[card].value) {
-        dst[card] = dst[card] || {}
-        dst[card].value = Util.deepJSONCopy(src[card].value)
-      }
-    }
-    return dst
-  }
-
-  private static copyPlaces(src, dst = {}): any {
-    for (let place in src) {
-      dst[place] = dst[place] || {}
-      dst[place].cards = src[place].cards.slice() // copy refs
-      if (src[place].value) {
-        dst[place].value = Util.deepJSONCopy(src[place].value)
-      }
-    }
-    return dst
-  }
-
-  private static copyValues(src, dst = {}): any {
-    for (let value in src) {
-      dst[value] = Util.deepJSONCopy(src[value])
-    }
-    return dst
-  }
-
   // take a snapshot of the cards, places and values
-  public takeSnapshot(): Snapshot {
-    // note we can't checkpoint the mersenne-twister
-    let snapshot: Snapshot = {allCards: {}, allPlaces: {}, allValues: {}}
-    Game.copyCards(this.allCards, snapshot.allCards)
-    Game.copyPlaces(this.allPlaces, snapshot.allPlaces)
-    Game.copyValues(this.allValues, snapshot.allValues) // using deep copyy, hopefully no refs
-    return snapshot
+  public takeSnapshot(): GameData {
+    return Util.copyJSON(this.data)
   }
 
   // rollback the cards, places and values to the last checkpoint
-  public rollbackSnapshot(snapshot: Snapshot) {
-    Game.copyCards(snapshot.allCards, this.allCards)
-    Game.copyPlaces(snapshot.allPlaces, this.allPlaces)
-    Game.copyValues(snapshot.allValues, this.allValues)
+  public rollbackSnapshot(snapshot: GameData) {
+    this.data = Util.copyJSON(snapshot)
   }
 
   public debugLog(msg) {
@@ -177,21 +154,21 @@ export default class Game {
   }
 
   public setValue(name: string, value: any) {
-    this.allValues[name] = value
+    this.data.allValues[name] = value
   }
 
   public getValue(name: string): any {
-    return this.allValues[name]
+    return this.data.allValues[name]
   }
 
   public addValue(name: string, delta: number): any {
-    this.allValues[name] = (this.allValues[name] || 0) + delta
-    return this.allValues[name]
+    this.data.allValues[name] = (this.data.allValues[name] || 0) + delta
+    return this.data.allValues[name]
   }
 
   public toggleValue(name: string, delta: number): any {
-    this.allValues[name] = !this.allValues[name]
-    return this.allValues[name]
+    this.data.allValues[name] = !this.data.allValues[name]
+    return this.data.allValues[name]
   }
 
   public registerCondition(condition: PickCondition): number {
@@ -200,19 +177,31 @@ export default class Game {
   }
 
   public filterCards(cardName: CardName): Card[] {
-    return Game.filterThings(cardName, this.allCards)
+    return Game.filterThings(cardName, this.data.allCards)
   }
 
   public filterCardNames(cardName: CardName): string[] {
-    return Game.filterThings(cardName, this.allCards).map(p => p.name)
+    return Game.filterThings(cardName, this.data.allCards).map(p => p.name)
+  }
+
+  public getCardByName(cardName: string): Card {
+    return this.data.allCards[cardName]
+  }
+
+  public getPlaceByName(placeName: string): Place {
+    return this.data.allPlaces[placeName]
+  }
+
+  public getPlayerByName(playerName: string): Player {
+    return this.data.allPlayers[playerName]
   }
 
   public getCards(placeName: PlaceName): Card[] {
-    const places: Place[] = Game.filterThings(placeName, this.allPlaces)
-    let cards = []
+    const places: Place[] = Game.filterThings(placeName, this.data.allPlaces)
+    let cards: Card[] = []
     for (let place of places) {
-      if (place.cards.length > 0) {
-        cards.push(...place.cards)
+      for (let cardName of place.cards) {
+        cards.push(this.getCardByName(cardName))
       }
     }
     return cards
@@ -223,7 +212,7 @@ export default class Game {
   }
 
   public getCardCount(placeName: PlaceName): number {
-    const places: Place[] = Game.filterThings(placeName, this.allPlaces)
+    const places: Place[] = Game.filterThings(placeName, this.data.allPlaces)
     let length = 0
     for (let place of places) {
       length += place.cards.length
@@ -232,19 +221,23 @@ export default class Game {
   }
 
   public filterPlaces(placeName: PlaceName): Place[] {
-    return Game.filterThings(placeName, this.allPlaces)
+    return Game.filterThings(placeName, this.data.allPlaces)
   }
 
   public filterPlaceNames(placeName: PlaceName): string[] {
-    return Game.filterThings(placeName, this.allPlayers).map(p => p.name)
+    return Game.filterThings(placeName, this.data.allPlayers).map(p => p.name)
   }
 
   public filterPlayers(playerName: PlayerName): Player[] {
-    return Game.filterThings(playerName, this.allPlayers)
+    return Game.filterThings(playerName, this.data.allPlayers)
   }
 
   public filterPlayerNames(playerName: PlayerName): string[] {
-    return Game.filterThings(playerName, this.allPlayers).map(p => p.name)
+    return Game.filterThings(playerName, this.data.allPlayers).map(p => p.name)
+  }
+
+  public getAllPlayerNames(): string[] {
+    return Object.keys(this.data.allPlayers)
   }
 
   // function insertCard(fromList: any[], from: number, toList: any[], to: number) {
@@ -260,37 +253,37 @@ export default class Game {
   // }
 
   private findPlace(card: Card): CardPlace {
-    for (let key in this.allPlaces) {
-      const place = this.allPlaces[key]
-      const i = place.cards.indexOf(card)
+    const cardName = card.name
+
+    // Find can be slow because it searches through every place, but we usually
+    // look for cards in groups, so check the last place we looked for a card.
+    // We could put a place index on each card, but this needs to be maintained
+    // and we can't stop users from arbitrarily changing it, so better to
+    // always search through all places
+    if (this.cacheFindPlace) {
+      const i = this.cacheFindPlace.cards.indexOf(cardName)
       if (i !== -1) {
+        return [this.cacheFindPlace, i]
+      }
+    }
+
+    for (let name in this.data.allPlaces) {
+      const place = this.data.allPlaces[name]
+      const i = place.cards.indexOf(cardName)
+      if (i !== -1) {
+        this.cacheFindPlace = place
         return [place, i]
       }
     }
     return [,-1]
   }
 
+  // NOTE assumes card has already been removed from all places
   private insertCard(card: Card, to: Place, index: number) {
-    const [oldPlace, oldIndex] = this.findPlace(card)
-
-    // if we insert into the same list and the insertion index is
-    // after the old index, then need to decrease the insertion
-    // index by 1 because when we remove the card, we will shift
-    // all the subsequent cards down one place
-    if (oldPlace === to) {
-      if (index > oldIndex) {
-        --index
-      }
-    }
-
-    if (oldPlace && oldIndex !== -1) {
-      oldPlace.cards.splice(oldIndex, 1)
-    }
-
     if (index === -1 || index >= to.cards.length) {
-      to.cards.push(card)
+      to.cards.push(card.name)
     } else {
-      to.cards.splice(index, 0, card)
+      to.cards.splice(index, 0, card.name)
     }
   }
 
@@ -299,18 +292,19 @@ export default class Game {
       return
     }
 
-    let card
+    let cardName: string
     if (index === -1 || index >= from.cards.length) {
-      card = from.cards.splice(-1, 1)[0]
+      cardName = from.cards.splice(-1, 1)[0]
     } else {
-      card = from.cards.splice(index, 1)[0]
+      cardName = from.cards.splice(index, 1)[0]
     }
+    let card = this.getCardByName(cardName)
     return card
   }
 
   public addPlayer(player: Player): Game {
-    // TODO assert that player.name is unique??
-    this.allPlayers[player.name] = player
+    Util.assert(!this.data.allPlayers[player.name], `Card (${player.name}) already exists`)
+    this.data.allPlayers[player.name] = player
     this.playerChain.add(player.name)
     return this
   }
@@ -320,7 +314,8 @@ export default class Game {
   }
 
   private addPlaceInternal(place: Place) {
-    this.allPlaces[place.name] = place
+    Util.assert(!this.data.allPlaces[place.name], `Place (${place.name}) already exists`)
+    this.data.allPlaces[place.name] = place
     if (!Array.isArray(place.cards)) {
       place.cards = []
     }
@@ -339,8 +334,9 @@ export default class Game {
   }
 
   private addCardInternal(card: Card, to: Place, index: number) {
+    Util.assert(!this.data.allCards[card.name], `Card (${card.name}) already exists`)
     this.insertCard(card, to, index)
-    this.allCards[card.name] = card
+    this.data.allCards[card.name] = card
   }
 
   public addCard(card: Card | Card[], to: Place, index: number = -1): Game {
@@ -387,6 +383,10 @@ export default class Game {
     // TODO what if there is a limit on the number of cards at the destination
     let iTo = 0, iToIndex = 0
     for (let card of cards) {
+      const [fromPlace, fromIndex] = this.findPlace(card)
+      const cardRemoved = this.removeCard(fromPlace, fromIndex)
+      Util.assert(card === cardRemoved)
+
       this.insertCard(card, tos[iTo], toIndices[iToIndex])
 
       // iterate over the 'tos' first, then the 'toIndices'
@@ -491,7 +491,7 @@ export default class Game {
       const places = this.filterPlaces(name)
       if (places.length > 0) {
         for (let card of places[0].cards) {
-          let dice = card as Dice
+          let dice = this.data.allCards[card] as Dice
           if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
             dice.value = dice.faces[this.randomInt(0, dice.faces.length)]
           }
@@ -503,11 +503,14 @@ export default class Game {
   }
 
   public toString(): string {
-    const allCards = Object.keys(this.allCards).map(c => this.allCards[c]) // Object.values(this.allCards)
+    const allCards = Object.keys(this.data.allCards).map(c => this.data.allCards[c]) // Object.values(this.allCards)
     let str = `CARDS (${allCards.length}) = ${allCards.map(c => c.name).join(',')}\n`
-    for (let placeName in this.allPlaces) {
-      const place = this.allPlaces[placeName]
-      str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => c.name + (c.value ? `[${c.value.toString()}]` : '')).join(',')}\n`
+    for (let placeName in this.data.allPlaces) {
+      const place = this.data.allPlaces[placeName]
+      str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
+        const card = this.getCardByName(c)
+        c + (card.value ? `[${card.value.toString()}]` : '')
+      }).join(',')}\n`
     }
     return str
   }

@@ -152,8 +152,7 @@ function hasAllRedThrees(cards: string[]): boolean {
 function* deal(g: Game) {
   g.shuffle('draw')
 
-  debugger
-  for (let player in g.allPlayers) {
+  for (let player of g.getAllPlayerNames()) {
     const team = getTeam(g, player)
 
     let numDraw = NUM_INITIAL_CARDS
@@ -236,7 +235,6 @@ function* draw(g: Game, player: string, team: string) {
     if (g.getCardCount(discardMeldPlace) < MIN_MELD_SIZE) {
       const oldMeldScore = getMeldScore(g, player)
       const playerHandEmpty = yield* meld(g, player, team, {rank: topDiscardRank, twoNaturals: wasPackFrozen})
-      debugger
       const newMeldScore = getMeldScore(g, player)
 
       // if we cancelled the meld then rollback taking the card
@@ -270,6 +268,7 @@ function* draw(g: Game, player: string, team: string) {
       }
     }
   } else {
+    debugger
     g.move('discard', `${player}_hand`, -1)
     g.debugLog(`${player} TAKES THE PACK`)
   }
@@ -317,6 +316,9 @@ function getMeldPlaces(g: Game, player: string, cards: string[], options: MeldOp
   }
 
   let [numNatural, numWild, cardRank] = analyseCards(cards)
+  if (!numNatural && !numWild && !cardRank) {
+    return [] // illegal combination of cards
+  }
 
   if (options.rank && cardRank !== options.rank) {
     return [] // card rank does not match the requested meld rank
@@ -356,7 +358,7 @@ function meldCondition(g: Game, player: string, cards: string[], options: MeldOp
 
 function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOptions) {
   let cards = []
-  let meldOptions: MeldOptions = Util.deepJSONCopy(initialMeldOptions)
+  let meldOptions: MeldOptions = Util.copyJSON(initialMeldOptions)
   let meldCount = 0
   const playerHand = `${player}_hand`
   const snapshot = g.takeSnapshot()
@@ -364,11 +366,11 @@ function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOp
 
   let doMeld = true
   while (doMeld) {
-    debugger
     const n = g.getCardCount(playerHand)
     const maxPickCount = Math.min(8, canGoOut ? n : n - 1)
 
-    g.debugLog(`Player ${player} choose cards to meld:`) // TODO how do we localize this?
+    // TODO this can take a very long time when we have a large number of combinations
+    g.debugLog(`Player ${player} choose cards to meld (${Util.combination(n,0,maxPickCount)} combinations):`) // TODO how do we localize this?
     cards = yield g.pick(player, g.getCardNames(playerHand), [0,maxPickCount], meldCondition, meldOptions)
     doMeld = cards.length > 0
 

@@ -26,8 +26,15 @@ export default class Util {
     }
   }
 
-  public static combination(n: number, k: number): number {
-    return Util.factorial(n)/(Util.factorial(k)*Util.factorial(n - k))
+  public static combination(n: number, k1: number, k2?: number): number {
+    if (typeof k2 === 'undefined') {
+      k2 = k1
+    }
+    let sum = 0
+    for (let k = k1; k <= k2; ++k) {
+      sum += Util.factorial(n)/(Util.factorial(k)*Util.factorial(n - k))
+    }
+    return sum
   }
 
   // public static getRandomCombination<T>(list: T[], startCount: number, endCount?: number): T[] {
@@ -242,20 +249,20 @@ export default class Util {
     }
   }
 
-  public static deepJSONCopy(src: any) {
+  public static copyJSON(src: any) {
     if (src === null || typeof(src) !== 'object') {
       return src
     } else if (Array.isArray(src)) {
       let dest = []
       const n = src.length
       for (let i = 0; i < n; ++i) {
-        dest[i] = Util.deepJSONCopy(src[i])
+        dest[i] = Util.copyJSON(src[i])
       }
       return dest
     } else {
       let dest = {}
       for (let key in src) {
-        dest[key] = Util.deepJSONCopy(src[key])
+        dest[key] = Util.copyJSON(src[key])
       }
       return dest
     }
