@@ -8,6 +8,10 @@ Tape.test('add player', (test) => {
   g.addPlayer(player1)
   g.addPlayer(player2)
 
+  test.deepEqual(g.filterPlayers('DoesNotExist'), [], 'invalid player')
+  test.deepEqual(g.filterPlayers(['DoesNotExist','NorMe']), [], 'invalid players')
+  test.deepEqual(g.filterPlayers(p => false), [], 'no players')
+  debugger
   test.deepEqual(g.filterPlayers(p => true), [player1, player2], 'all players')
   test.end()
 })
@@ -18,6 +22,9 @@ Tape.test('test addPlace', (test) => {
   g.addPlace(place1)
   g.addPlace(place2)
 
+  test.deepEqual(g.filterPlaces('DoesNotExist'), [], 'invalid place')
+  test.deepEqual(g.filterPlaces(['DoesNotExist','NorMe']), [], 'invalid places')
+  test.deepEqual(g.filterPlaces(p => false), [], 'no places')
   test.deepEqual(g.filterPlaces('Place1'), [place1], 'place by name')
   test.deepEqual(g.filterPlaces(['Place2', 'Place1']), [place2, place1], 'place by list')
   test.deepEqual(g.filterPlaces((p) => p.name === 'Place2'), [place2], 'place by function')
@@ -31,6 +38,9 @@ Tape.test('test addCard', (test) => {
 
   g.addPlace([place1, place2]).addCard([card1, card2], place1)
 
+  test.deepEqual(g.filterCards('DoesNotExist'), [], 'invalid card')
+  test.deepEqual(g.filterCards(['DoesNotExist','NorMe']), [], 'invalid cards')
+  test.deepEqual(g.filterCards(p => false), [], 'no cards')
   test.deepEqual(g.getCards('Place1'), [card1, card2], 'all cards in place1')
   test.deepEqual(g.getCards('Place2'), [], 'no cards in place2')
   test.deepEqual(g.filterCards('Card1'), [card1], 'cards by name')

@@ -9,16 +9,17 @@ interface Player {
 
 interface Card {
   name: string
+  value?: any
   [others: string]: any
 }
 
 interface Dice extends Card {
-  value?: any // is one of the faces[], if missing, will be set when added
   faces: any[]
 }
 
 interface Place {
   name: string
+  value?: any
   cards?: Card[]
   [others: string]: any
 }
@@ -27,7 +28,7 @@ type CardPlace = [Place, number]
 
 type PickCount = number | number[]
 
-type PickCondition = (g: Game, list: any[]) => boolean
+type PickCondition = (g: Game, player: string, list: string[], conditionArg?: any) => boolean
 
 interface PickCommand {
   id: number // starts from 0
@@ -36,6 +37,13 @@ interface PickCommand {
   options: string[]
   count: PickCount
   condition?: number
+  conditionArg?: any
+}
+
+interface Snapshot {
+  allCards: {[name: string]: Card}
+  allPlaces: {[name: string]: Card}
+  allValues: {[key: string]: Card}
 }
 
 type CardFilterFn = (Card) => boolean
@@ -67,7 +75,7 @@ export default class Game {
   rules: any
   playerChain = new Chain()
   seed: number
-  random
+  private random: MersenneTwister
 
   constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: GameOptions, seed: number = Date.now()) {
     this.setupFn = setupFn
@@ -89,10 +97,54 @@ export default class Game {
     }
   }
 
+  private static copyCards(src, dst = {}): any {
+    for (let card in src) {
+      if (src[card].value) {
+        dst[card] = dst[card] || {}
+        dst[card].value = Util.deepJSONCopy(src[card].value)
+      }
+    }
+    return dst
+  }
+
+  private static copyPlaces(src, dst = {}): any {
+    for (let place in src) {
+      dst[place] = dst[place] || {}
+      dst[place].cards = src[place].cards.slice() // copy refs
+      if (src[place].value) {
+        dst[place].value = Util.deepJSONCopy(src[place].value)
+      }
+    }
+    return dst
+  }
+
+  private static copyValues(src, dst = {}): any {
+    for (let value in src) {
+      dst[value] = Util.deepJSONCopy(src[value])
+    }
+    return dst
+  }
+
+  // take a snapshot of the cards, places and values
+  public takeSnapshot(): Snapshot {
+    // note we can't checkpoint the mersenne-twister
+    let snapshot: Snapshot = {allCards: {}, allPlaces: {}, allValues: {}}
+    Game.copyCards(this.allCards, snapshot.allCards)
+    Game.copyPlaces(this.allPlaces, snapshot.allPlaces)
+    Game.copyValues(this.allValues, snapshot.allValues) // using deep copyy, hopefully no refs
+    return snapshot
+  }
+
+  // rollback the cards, places and values to the last checkpoint
+  public rollbackSnapshot(snapshot: Snapshot) {
+    Game.copyCards(snapshot.allCards, this.allCards)
+    Game.copyPlaces(snapshot.allPlaces, this.allPlaces)
+    Game.copyValues(snapshot.allValues, this.allValues)
+  }
+
   public debugLog(msg) {
     if (this.options.debug) {
       console.log(msg)
-      debugger
     }
   }
 
@@ -109,15 +161,17 @@ export default class Game {
     if (typeof name === 'function') {
       let results = []
       for (let key in things) {
-        if (name(things[key])) {
+        if (things[key] && name(things[key])) {
           results.push(things[key])
         }
       }
       return results
     } else if (typeof name === 'string') {
-      return [things[name]]
+      if (things[name]) {
+        return [things[name]]
+      }
     } else if (Array.isArray(name)) {
-      return name.map(r => things[r]) // the output is the same order as the input
+      return name.map(r => things[r]).filter(x => x) // the output is the same order as the input
     }
     return []
   }
@@ -149,6 +203,10 @@ export default class Game {
     return Game.filterThings(cardName, this.allCards)
   }
 
+  public filterCardNames(cardName: CardName): string[] {
+    return Game.filterThings(cardName, this.allCards).map(p => p.name)
+  }
+
   public getCards(placeName: PlaceName): Card[] {
     const places: Place[] = Game.filterThings(placeName, this.allPlaces)
     let cards = []
@@ -177,8 +235,16 @@ export default class Game {
     return Game.filterThings(placeName, this.allPlaces)
   }
 
+  public filterPlaceNames(placeName: PlaceName): string[] {
+    return Game.filterThings(placeName, this.allPlayers).map(p => p.name)
+  }
+
   public filterPlayers(playerName: PlayerName): Player[] {
     return Game.filterThings(playerName, this.allPlayers)
+  }
+
+  public filterPlayerNames(playerName: PlayerName): string[] {
+    return Game.filterThings(playerName, this.allPlayers).map(p => p.name)
   }
 
   // function insertCard(fromList: any[], from: number, toList: any[], to: number) {
@@ -249,6 +315,10 @@ export default class Game {
     return this
   }
 
+  public getPlayerCount(): number {
+    return this.playerChain.getLength()
+  }
+
   private addPlaceInternal(place: Place) {
     this.allPlaces[place.name] = place
     if (!Array.isArray(place.cards)) {
@@ -300,10 +370,13 @@ export default class Game {
   // index -1 represents the top, 0 is the bottom
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
-  public moveCards(cardName: CardName, toName: PlaceName, count: number = -1, toIndex: Index = -1): Game {
+  public moveCards(cardName: CardName, toName: PlaceName, count: number = -1, toIndex: Index = -1): Card[] {
     const cards: Card[] = this.filterCards(cardName)
     const tos: Place[] = this.filterPlaces(toName)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
+
+    Util.assert(cards.length > 0, `unable to find cards "${cardName}"`)
+    Util.assert(tos.length > 0, `unable to find tos "${toName}"`)
 
     if (count === -1) {
       count = cards.length
@@ -323,16 +396,19 @@ export default class Game {
       }
     }
 
-    return this
+    return cards
   }
 
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
-  public move(fromName: PlaceName, toName: PlaceName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): Game {
+  public move(fromName: PlaceName, toName: PlaceName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): Card[] {
     const froms: Place[] = this.filterPlaces(fromName)
     const tos: Place[] = this.filterPlaces(toName)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
+
+    Util.assert(froms.length > 0, `unable to find froms "${fromName}"`)
+    Util.assert(tos.length > 0, `unable to find tos "${toName}"`)
 
     let cardCount = 0
     for (let from of froms) {
@@ -349,6 +425,7 @@ export default class Game {
     let iFrom = 0, iFromIndex = 0
     let iTo = 0, iToIndex = 0
     let card
+    let cardsMoved = []
 
     do {
       // if we try to remove and insert from within a place, then the
@@ -362,6 +439,7 @@ export default class Game {
       if (card) {
         this.insertCard(card, tos[iTo], toIndices[iToIndex])
         --count
+        cardsMoved.push(card)
       }
 
       if (count > 0) {
@@ -380,7 +458,7 @@ export default class Game {
       }
     } while (count > 0)
 
-    return this
+    return cardsMoved
   }
 
   public shuffle(place: PlaceName): Game {
@@ -388,9 +466,8 @@ export default class Game {
 
     for (let name of placeNames) {
       const places = this.filterPlaces(name) // should only have 0 or 1 entries
-      if (places.length > 0) {
-        Util.fisherYates(places[0].cards)
-      }
+      Util.assert(places.length > 0, `unable to find place - ${name}`)
+      Util.fisherYates(places[0].cards)
     }
     return this
   }
@@ -435,20 +512,20 @@ export default class Game {
     return str
   }
 
-  public pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition) {
-    return {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition)}
+  public pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
+    return {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
 
-  public pickCards(who: string, cards: string[], count: PickCount = 1, condition?: PickCondition) {
-    return {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickCards(who: string, cards: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
+    return {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
 
-  public pickPlaces(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition) {
-    return {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickPlaces(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
+    return {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
 
-  public pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition) {
-    return {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition)}
+  public pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
+    return {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
 
   // // could we just use pick instead?
@@ -468,31 +545,33 @@ export default class Game {
 
     if (result.length > 0 && command.condition >= 0) {
       const conditionFn = this.registeredConditions[command.condition]
-      Util.assert(conditionFn(this, result), 'result does not meet the command conditions')
+      Util.assert(conditionFn(this, command.who, result, command.conditionArg), 'result does not meet the command conditions')
     }
 
     // TODO validate the number of results against the count
     // TODO recursively validate the options (as they may be further commands)
   }
 
-  private static parseCount(count: PickCount, countMax?: number): [number, number] {
+  // a -1 in the count is replaced with countMax1
+  private static parseCount(count: PickCount, countMax: number): [number, number] {
     let min = 1, max = 1
     let countMin = 0
 
     if (Array.isArray(count)) {
-      if (count.length > 0) {
-        min = Math.min(...count)
-        max = Math.max(...count)
+      let countCopy = count.map(x => x < 0 ? countMax : x)
+      if (countCopy.length > 0) {
+        min = Math.min(...countCopy)
+        max = Math.max(...countCopy)
       }
     } else if (typeof count === 'number') {
-      min = max = count
+      if (count === -1) {
+        min = max = countMax
+      } else {
+        min = max = count
+      }
     }
 
-    if (typeof countMax !== 'undefined') {
-      return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
-    } else {
-      return [Math.max(min, countMin), Math.max(max, countMin)]
-    }
+    return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
   }
 
   public static play(setup, rules, scoreFn, playerClients) {
@@ -503,9 +582,21 @@ export default class Game {
     let result = itr.next(g)
 
     while (!result.done) {
-      // TODO support multiple options
-      const bestOptions = playerClients[result.value.who](g, result.value, scoreFn)
-      g.validateResult(result.value, bestOptions)
+      let command = result.value
+      let bestOptions
+
+      // check for automatic returns e.g. no values, or only one value
+      const minMax = Game.parseCount(command.count, command.options.length)
+      if (minMax[0] === 0 && minMax[1] === 0) {
+        bestOptions = []
+      } else if (minMax[0] === 1 && minMax[1] === 1 && command.options.length === 1) {
+        Util.assert(command.condition < 0 || g.registeredConditions[command.condition](g, command.who, command.options), 'only one option but it does not meet the conditions')
+        bestOptions = command.options
+      } else {
+        bestOptions = playerClients[command.who](g, command, scoreFn)
+      }
+
+      g.validateResult(command, bestOptions)
       g.history.push(bestOptions)
       result = itr.next(bestOptions)
     }
@@ -513,7 +604,7 @@ export default class Game {
 
   public static consoleClient() {
     return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[][] {
-      const count = Game.parseCount(command.count)
+      const count = Game.parseCount(command.count, command.options.length)
       const conditionFn = command.condition >= 0 ? g.registeredConditions[command.condition] : null
 
       console.log(g.toString())
@@ -544,7 +635,7 @@ export default class Game {
           return []
         }
 
-        hasValidChoice = !conditionFn || conditionFn(g, choices)
+        hasValidChoice = !conditionFn || conditionFn(g, command.who, choices, command.conditionArg)
         if (!hasValidChoice) {
           console.log(`choice ${choices} is invalid`)
         }
@@ -563,12 +654,14 @@ export default class Game {
     //   return Util.getRandomCombination(command.options, count[0], count[1])
     // }
 
-    let combinations = Util.getCombinations(command.options, count[0], count[1])
-
+    let conditionFn
     if (command.condition >= 0) {
-      let conditionFn = g.registeredConditions[command.condition]
-      combinations = combinations.filter(x => conditionFn(g, x))
+      conditionFn = function(list: string[]) {
+        return g.registeredConditions[command.condition](g, command.who, list, command.conditionArg)
+      }
     }
+
+    let combinations = Util.getCombinations(command.options, count[0], count[1], conditionFn)
 
     return combinations
   }

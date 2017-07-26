@@ -88,6 +88,23 @@ export default class Chain {
     }
   }
 
+  public first(): any {
+    for (let x of this.items) {
+      if (x.valid) {
+        return x.data
+      }
+    }
+  }
+
+  public last(): any {
+    for (let i = this.items.length - 1; i >= 0; --i) {
+      const x = this.items[i]
+      if (x.valid) {
+        return x.data
+      }
+    }
+  }
+
   public random(): any {
     let validItems = this.items.filter(x => x.valid)
     return validItems[Util.randomInt(0, validItems.length)].data

@@ -7,12 +7,17 @@ Tape('test getCombinations', t => {
   let combo2 = Util.getCombinations([2,4,6,-1], 2)
   let combo3 = Util.getCombinations([2,4,6,-1], 3)
   let combo4 = Util.getCombinations([2,4,6,-1], 4)
+  let combo5 = Util.getCombinations([2,4,6,-1], 1, 2)
+  debugger
+  let combo6 = Util.getCombinations([2,4,6,-1], 1, 1, (xs => (xs[0]%2 === 0))) // only even numbers
 
-  t.deepEqual(combo0, [], 'empty combo')
+  t.deepEqual(combo0, [[]], 'empty combo')
   t.deepEqual(combo1, [[2], [4], [6], [-1]], 'combo of 1')
   t.deepEqual(combo2, [[2,4], [2,6], [2,-1], [4,6], [4,-1], [6,-1]], 'combo of 2')
   t.deepEqual(combo3, [[2,4,6], [2,4,-1], [2,6,-1], [4,6,-1]], 'combo of 3')
   t.deepEqual(combo4, [[2,4,6,-1]], 'combo of 4')
+  t.deepEqual(combo5, [[2], [4], [6], [-1], [2,4], [2,6], [2,-1], [4,6], [4,-1], [6,-1]], 'combo of 1 or 2')
+  t.deepEqual(combo6, [[2], [4], [6]], 'combo of 1, even numbers only')
 
   t.end()
 })

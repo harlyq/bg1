@@ -44,7 +44,7 @@ export default class Util {
   //   let randomIndex = Math.floor(Math.random()*numCombinations)
   // }
 
-  public static getCombinations<T>(list: T[], startCount: number, endCount?: number): T[][] {
+  public static getCombinations<T>(list: T[], startCount: number, endCount?: number, validationFn?: (x: T[]) => boolean): T[][] {
     if (typeof endCount === 'undefined') {
       endCount = startCount
     }
@@ -54,14 +54,14 @@ export default class Util {
       if (count === 0) {
         combinations.push([])
       } else {
-        combinations.push(...Util.getCombinationsInternal(list, count))
+        combinations.push(...Util.getCombinationsInternal(list, count, validationFn))
       }
     }
 
     return combinations
   }
 
-  private static getCombinationsInternal<T>(list: T[], count: number, lastCombo: T[] = [], nextIndex = 0): T[][] {
+  private static getCombinationsInternal<T>(list: T[], count: number, validationFn: (x: T[]) => boolean, lastCombo: T[] = [], nextIndex = 0): T[][] {
     if (count === 0) {
       return []
     }
@@ -74,9 +74,9 @@ export default class Util {
       newCombo.push(list[i])
 
       if (count > 1) {
-        let subChoices = Util.getCombinationsInternal(list, count - 1, newCombo, i + 1)
+        let subChoices = Util.getCombinationsInternal(list, count - 1, validationFn, newCombo, i + 1)
         choices.push(...subChoices)
-      } else {
+      } else if (typeof validationFn === 'undefined' || validationFn(newCombo)){
         choices.push(newCombo)
       }
     }
@@ -160,6 +160,26 @@ export default class Util {
     return list
   }
 
+  public static arrayIntersection<T>(a: T[], b: T[]): T[] {
+     let intersection = []
+     for (let x of a) {
+       if (b.indexOf(x) !== -1) {
+         intersection.push(x)
+       }
+     }
+     return intersection
+  }
+
+  public static arrayUnion<T>(a: T[], b: T[]): T[] {
+    let union = b.slice()
+    for (let x of a) {
+      if (union.indexOf(x) === -1) {
+        union.push(x)
+      }
+    }
+    return union
+  }
+
   // returns integer in the range (min, max]
   public static randomInt(min: number, max: number): number {
     return Math.floor(Math.random()*(max - min) + min)
@@ -219,6 +239,25 @@ export default class Util {
     // only works on nodejs
     if (process) {
       process.exit();
+    }
+  }
+
+  public static deepJSONCopy(src: any) {
+    if (src === null || typeof(src) !== 'object') {
+      return src
+    } else if (Array.isArray(src)) {
+      let dest = []
+      const n = src.length
+      for (let i = 0; i < n; ++i) {
+        dest[i] = Util.deepJSONCopy(src[i])
+      }
+      return dest
+    } else {
+      let dest = {}
+      for (let key in src) {
+        dest[key] = Util.deepJSONCopy(src[key])
+      }
+      return dest
     }
   }
 }

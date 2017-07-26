@@ -84,7 +84,7 @@ function calculateScore(cards: any[]) {
   return score
 }
 
-function validScoreCondition(g: Game, cards: string[]) {
+function validScoreCondition(g: Game, player: string, cards: string[]) {
   return calculateScore(g.filterCards(cards)) > 0 // TODO is this syntax too complicated?
 }
 
