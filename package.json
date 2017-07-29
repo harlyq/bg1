@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "mersenne-twister": "^1.1.0",
-    "readline-sync": "^1.4.7"
+    "readline-sync": "^1.4.7",
+    "seedrandom": "^2.4.3"
   }
 }

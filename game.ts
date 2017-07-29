@@ -1,7 +1,9 @@
 import Util from './util.js'
 import Chain from './chain.js'
 import * as ReadlineSync from 'readline-sync'
-import * as MersenneTwister from 'mersenne-twister' // HACK not a module
+//import * as MersenneTwister from 'mersenne-twister' // HACK not a module
+import * as seedrandom from 'seedrandom'
+let fs = require('fs');
 
 interface Player {
   name: string
@@ -29,6 +31,12 @@ type CardPlace = [Place, number]
 type PickCount = number | number[]
 
 type PickCondition = (g: Game, player: string, list: string[], conditionArg?: any) => boolean
+
+enum Playback {
+  PLAY,
+  PAUSE,
+  RECORD
+}
 
 interface PickCommand {
   id: number // starts from 0
@@ -60,6 +68,7 @@ interface Named {
 
 interface GameOptions {
   debug?: boolean
+  saveHistory?: boolean
 }
 
 // must not contain references or classes
@@ -70,7 +79,172 @@ interface GameData {
   allValues: {[key: string]: any}
 }
 
-export default class Game {
+export class GameSystem {
+  playback: Playback = Playback.PAUSE
+  oldPlayback: Playback = Playback.PAUSE
+  g: Game
+  itr: any
+  result: any
+  writeHistoryFile: boolean = false
+  historyFile: string = ''
+  history: any[] = []
+  historyIndex: number // curent seek position, or history.length if at the end
+  setup: any
+  rules: any
+  scoreFn: (g: Game, playerName: string) => number
+  seed: any
+  options: GameOptions = {}
+  playerClients: any = {}
+
+  constructor(setup, rules, scoreFn, playerClients, options: GameOptions = {}, seed = Date.now(), history: any[] = []) {
+    this.setup = setup
+    this.rules = rules
+    this.scoreFn = scoreFn
+    this.seed = seed
+    this.options = {...options}
+    this.playerClients = {...playerClients}
+    this.initGame(setup, rules, scoreFn, playerClients, options, seed)
+    this.history = history.length === 0 ? [seed] : history
+    this.historyIndex = 0
+    this.playback = Playback.RECORD
+  }
+
+  private initGame(setup, rules, scoreFn, playerClients, options, seed) {
+    this.g = new Game(setup, rules, Object.keys(playerClients), options, seed)
+    this.scoreFn = scoreFn
+    this.itr = rules()
+    this.itr.next()
+    this.result = this.itr.next(this.g)
+    this.historyFile = options.saveHistory ? `history${seed}.json` : ''
+  }
+
+  public seek(replayTo: number) {
+    // restart the game, and seek to the desired position
+    // always need to start from the beginning for the iterator to work correctly
+    this.initGame(this.setup, this.rules, this.scoreFn, this.playerClients, this.options, this.seed)
+    this.playback = Playback.PLAY
+
+    replayTo = Math.min(replayTo, this.history.length)
+    while (!this.result.done && this.historyIndex < replayTo) {
+      this.update()
+    }
+
+    this.pause()
+  }
+
+  public togglePause() {
+    if (this.playback === Playback.PAUSE) {
+      if (this.oldPlayback === Playback.PLAY) {
+        this.play()
+      } else if (this.oldPlayback === Playback.RECORD) {
+        this.record()
+      }
+    } else {
+      this.pause()
+    }
+  }
+
+  public canPause(): boolean {
+    return this.playback === Playback.PLAY || this.playback === Playback.RECORD
+  }
+
+  public pause() {
+    if (this.canPause()) {
+      this.oldPlayback = this.playback
+      this.playback = Playback.PAUSE
+    }
+  }
+
+  public canPlay(): boolean {
+    return this.playback === Playback.PAUSE
+  }
+
+  public play() {
+    if (this.canPlay()) {
+      this.playback = Playback.PLAY
+    }
+  }
+
+  public canRecord(): boolean {
+    return true
+  }
+
+  public record() {
+    if (this.canRecord()) {
+      this.playback = Playback.RECORD
+      this.history.length = this.historyIndex
+    }
+  }
+
+  public canStepBack(): boolean {
+    return this.playback === Playback.PAUSE && this.historyIndex > 0
+  }
+
+  public stepBack() {
+    if (this.canStepBack()) {
+      this.seek(this.historyIndex - 1)
+    }
+  }
+
+  public canStepForward(): boolean {
+    return this.playback === Playback.PAUSE && this.historyIndex < this.history.length - 1
+  }
+
+  public stepForward() {
+    if (this.canStepForward()) {
+      this.seek(this.historyIndex + 1)
+    }
+  }
+
+  public update() {
+    if (this.playback === Playback.PAUSE) {
+      return
+    } else if (this.playback === Playback.PLAY && this.historyIndex >= this.history.length) {
+      return
+    }
+
+    if (!this.result.done) {
+      const command = this.result.value
+
+      let choice
+      if (this.historyIndex > this.history.length) {
+        choice = this.history[this.historyIndex++]
+      } else {
+        choice = this.playerClients[command.who](this.g, command, this.scoreFn)
+        this.history.push(choice)
+        this.historyIndex = this.history.length
+
+        if (this.historyFile) {
+          fs.writeFileSync(this.historyFile, JSON.stringify(this.history))
+        }
+      }
+
+      this.validateChoice(command, choice)
+      this.result = this.itr.next(choice)
+    }
+  }
+
+  private validateChoice(command: PickCommand, result: any[]) {
+    //Util.assert(!(result instanceof IterableIterator<{}>), 'missing "yield*" before a call to another function')
+
+    Util.assert(Array.isArray(result), 'result is not an array')
+
+    for (let i = 0; i < result.length; ++i) {
+      // this may be due to global variables for not using the Game.random() functions
+      Util.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
+    }
+
+    if (result.length > 0 && command.condition >= 0) {
+      const conditionFn = this.g.registeredConditions[command.condition]
+      Util.assert(conditionFn(this.g, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
+    }
+
+    // TODO validate the number of results against the count
+    // TODO recursively validate the options (as they may be further commands)
+  }
+}
+
+export class Game {
   data: GameData = {
     allCards: {},
     allPlaces: {},
@@ -86,14 +260,16 @@ export default class Game {
   rules: any
   playerChain = new Chain()
   seed: number
-  private random: MersenneTwister
+  private random: seedrandom
   cacheFindPlace: Place
 
   constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: GameOptions, seed: number = Date.now()) {
     this.setupFn = setupFn
     this.rules = rules
     this.seed = seed
-    this.random = new MersenneTwister(seed)
+    this.random = seedrandom(seed, {state: true})
+
+    this.history.push(seed)
 
     // TODO where is the best place to do this?
     if (Array.isArray(playerNames)) {
@@ -127,7 +303,16 @@ export default class Game {
 
   // returns integer in the range (min, max]
   private randomInt(min: number, max: number): number {
-    return Math.floor(this.random.random()*(max - min) + min)
+    return Math.floor(this.random()*(max - min) + min)
+  }
+
+  private fisherYates<T>(list: T[]): T[] {
+    let n = list.length
+    for (var i = 0; i < n - 1; ++i) {
+      var j = this.randomInt(i, n)
+      Util.swapElements(list, i, j)
+    }
+    return list
   }
 
   public getHistory(): any[] {
@@ -467,7 +652,7 @@ export default class Game {
     for (let name of placeNames) {
       const places = this.filterPlaces(name) // should only have 0 or 1 entries
       Util.assert(places.length > 0, `unable to find place - ${name}`)
-      Util.fisherYates(places[0].cards)
+      this.fisherYates(places[0].cards)
     }
     return this
   }
@@ -503,13 +688,13 @@ export default class Game {
   }
 
   public toString(): string {
-    const allCards = Object.keys(this.data.allCards).map(c => this.data.allCards[c]) // Object.values(this.allCards)
+    const allCards = Object.keys(this.data.allCards).map(key => this.data.allCards[key]) // Object.values(this.allCards)
     let str = `CARDS (${allCards.length}) = ${allCards.map(c => c.name).join(',')}\n`
     for (let placeName in this.data.allPlaces) {
       const place = this.data.allPlaces[placeName]
       str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
         const card = this.getCardByName(c)
-        c + (card.value ? `[${card.value.toString()}]` : '')
+        return c + (card.value ? `[${card.value.toString()}]` : '')
       }).join(',')}\n`
     }
     return str
@@ -543,12 +728,12 @@ export default class Game {
 
     for (let i = 0; i < result.length; ++i) {
       // this may be due to global variables for not using the Game.random() functions
-      Util.assert(command.options.indexOf(result[i]) !== -1, 'the result contains options which were not in the original command')
+      Util.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
     }
 
     if (result.length > 0 && command.condition >= 0) {
       const conditionFn = this.registeredConditions[command.condition]
-      Util.assert(conditionFn(this, command.who, result, command.conditionArg), 'result does not meet the command conditions')
+      Util.assert(conditionFn(this, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
     }
 
     // TODO validate the number of results against the count
@@ -577,34 +762,6 @@ export default class Game {
     return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
   }
 
-  public static play(setup, rules, scoreFn, playerClients) {
-    let g = new Game(setup, rules, Object.keys(playerClients), {debug: true})
-
-    let itr = rules()
-    itr.next()
-    let result = itr.next(g)
-
-    while (!result.done) {
-      let command = result.value
-      let bestOptions
-
-      // check for automatic returns e.g. no values, or only one value
-      const minMax = Game.parseCount(command.count, command.options.length)
-      if (minMax[0] === 0 && minMax[1] === 0) {
-        bestOptions = []
-      } else if (minMax[0] === 1 && minMax[1] === 1 && command.options.length === 1) {
-        Util.assert(command.condition < 0 || g.registeredConditions[command.condition](g, command.who, command.options), 'only one option but it does not meet the conditions')
-        bestOptions = command.options
-      } else {
-        bestOptions = playerClients[command.who](g, command, scoreFn)
-      }
-
-      g.validateResult(command, bestOptions)
-      g.history.push(bestOptions)
-      result = itr.next(bestOptions)
-    }
-  }
-
   public static consoleClient() {
     return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[][] {
       const count = Game.parseCount(command.count, command.options.length)
@@ -612,29 +769,30 @@ export default class Game {
 
       console.log(g.toString())
       if (count[0] === count[1]) {
-        console.log(`Choose ${count[0]}`)
+        console.log(`Select ${count[0]} choice`)
       } else {
-        console.log(`Choose between ${count[0]} and ${count[1]}`)
+        console.log(`Select between ${count[0]} and ${count[1]} choices`)
       }
 
       let choices = []
       let hasValidChoice = false
 
       while (!hasValidChoice) {
-        let selected
         let options = command.options.slice()
         choices = []
 
-        while (choices.length < count[1] && selected !== -1) {
-          selected = ReadlineSync.keyInSelect(options, 'Which option? ')
+        while (choices.length < count[1]) {
+          let selected = ReadlineSync.keyInSelect(options, 'Which option? ', {cancel: (count[0] === 0) ? 'CANCEL' : false})
           if (selected !== -1) {
             choices.push(options[selected])
             options.splice(selected, 1)
+          } else if (choices.length >= count[0]) {
+            break
           }
         }
 
-        // quitting whithout meeting the minimum
-        if (choices.length < count[0]) {
+        // cancelled
+        if (choices.length === 0) {
           return []
         }
 
@@ -753,6 +911,18 @@ export default class Game {
     }
   }
 
+  public static historyClient(history: string[][]): any {
+    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+      console.log(g.toString())
+      if (history.length === 0) {
+        console.log('history completed')
+        Util.quit()
+      }
+      debugger
+      return history.shift()
+    }
+  }
+
   private static findAverageScore(scores: {optionIndex: number, score: number}[]): number {
     let scoreTotal = scores.reduce((t,x) => t + x.score, 0)
     return scoreTotal/scores.length
@@ -764,7 +934,7 @@ export default class Game {
 
   // we build a new game, and play the replay through that game
   // once the replay is ended try a new option
-  private static createTrial(g): {trial: any, trialItr: any, trialResult: any} {
+  private static createTrial(g, replayTo = -1): {trial: any, trialItr: any, trialResult: any} {
     // TODO should place and card be internal constructs of the game, and all
     // custom data must be managed through allValues?
     // TODO ugly
@@ -776,7 +946,7 @@ export default class Game {
 
     // run through the playback results
     let replayIndex = 0
-    while (!trialResult.done && g.history[replayIndex]) {
+    while (!trialResult.done && g.history[replayIndex] && (replayTo === -1 || replayIndex < replayTo)) {
       let choice = g.history[replayIndex++]
       trial.history.push(choice)
       trial.validateResult(trialResult.value, choice)

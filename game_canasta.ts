@@ -1,10 +1,12 @@
-import Game from './game.js'
+import {GameSystem, Game} from './game.js'
 import Util from './util.js'
+let fs = require('fs')
 
 const SUITS = ['H','D','S','C']
 const RANKS = ['2','3','4','5','6','7','8','9','T','J','Q','K','A']
 const TAKE_CARD = 'take card'
 const TAKE_PACK = 'take pack'
+const END_GAME = 'end game'
 const NUM_INITIAL_CARDS = 13
 const MIN_MELD_SIZE = 3
 const MIN_CANASTA_SIZE = 7
@@ -80,10 +82,7 @@ function* rules() {
 
   // TODO calculate team scores
 
-  if (g.options.debug) {
-    g.debugLog(`${player} went out`)
-    Util.quit()
-  }
+  g.debugLog(`${player} went out`)
 }
 
 function getInitialScore(g: Game, player: string): number {
@@ -197,13 +196,12 @@ function* draw(g: Game, player: string, team: string) {
   const topDiscard = discards[discards.length - 1] // must always be a discard
   const topDiscardRank = getCardRank(topDiscard)
 
-  // TODO need to consider the initial score
   let canTakePack = !isBlackThree(topDiscard) && !isRedThree(topDiscard) && !isWildCard(topDiscard)
-  if (canTakePack) {
-    canTakePack = (playerHandBuckets[topDiscardRank] >= 2) ||
-          (!wasPackFrozen && playerHandBuckets[topDiscardRank] >= 1 && hasWildCards(playerHand)) ||
-          (!wasPackFrozen && g.getCardCount(`team${team}_meld_${topDiscardRank}`) > 0)
-  }
+  // if (canTakePack) {
+  //   canTakePack = (playerHandBuckets[topDiscardRank] >= 2) ||
+  //         (!wasPackFrozen && playerHandBuckets[topDiscardRank] >= 1 && hasWildCards(playerHand)) ||
+  //         (!wasPackFrozen && g.getCardCount(`team${team}_meld_${topDiscardRank}`) > 0)
+  // }
 
   const drawCount = g.getCardCount('draw')
   const canDraw = drawCount > 0
@@ -211,12 +209,12 @@ function* draw(g: Game, player: string, team: string) {
   let possibleActions = []
   if (canDraw) {
     possibleActions.push(TAKE_CARD)
+  } else {
+    possibleActions.push(END_GAME)
   }
+
   if (canTakePack) {
     possibleActions.push(TAKE_PACK)
-  }
-  if (possibleActions.length === 0) {
-    return true // game over
   }
 
   if (canDraw && canTakePack) {
@@ -242,16 +240,20 @@ function* draw(g: Game, player: string, team: string) {
         // TODO do we want to stop computer players from cancelling the take?
         g.debugLog(`${player} abandons taking the top discard`)
         g.rollbackSnapshot(snapshot)
-        actions = [] // player cancelled meld pick
-      } else if (wasPackFrozen) {
-        g.debugLog('PACK UNFROZEN')
+        actions = [TAKE_CARD] // player cancelled meld pick
+      } else {
+        g.move('discard', `${player}_hand`, -1)
+        g.debugLog(`${player} TAKES THE PACK`)
+        if (wasPackFrozen) {
+          g.debugLog('PACK UNFROZEN')
+        }
       }
     } else {
       g.debugLog(`places top discard onto existing meld ${discardMeldPlace} (${g.getCardCount(discardMeldPlace)}) - meld score ${getMeldScore(g, player)}`)
     }
   }
 
-  if (actions.length === 0 || actions[0] === TAKE_CARD) {
+  if (actions[0] === TAKE_CARD) {
     let drawCard = 1
     while (drawCard > 0) {
       let cards = g.move('draw', `${player}_hand`, drawCard)
@@ -267,10 +269,10 @@ function* draw(g: Game, player: string, team: string) {
         g.debugLog(`player ${player} has a red three, draw again`)
       }
     }
-  } else {
-    debugger
-    g.move('discard', `${player}_hand`, -1)
-    g.debugLog(`${player} TAKES THE PACK`)
+  }
+
+  if (actions[0] === END_GAME) {
+    return true
   }
 
   return false
@@ -419,6 +421,8 @@ function* discard(g: Game, player: string, team: string) {
   if (isPackFrozen(g.getCardNames('discard')) && !wasPackFrozen) {
     g.debugLog(`PACK FROZEN`)
   }
+
+  return g.getCardCount(`${player}_hand`) === 0
 }
 
 function getMeldScore(g: Game, player: string): number {
@@ -465,9 +469,33 @@ function getScore(g: Game, player: string): number {
   return meldScore + handScore
 }
 
+
+// console.log(process.argv)
+// debugger
+// let history
+// const replayIndex = process.argv.indexOf('--replay')
+// if (replayIndex !== -1) {
+//   const historyFile = process.argv[replayIndex + 1]
+//   history = JSON.parse(fs.readFileSync(historyFile))
+// }
+//
+// let playerClients = {
+//   'a': history ? Game.historyClient(history) : Game.randomClient(), // Game.consoleClient(),
+//   'b': history ? Game.historyClient(history) : Game.consoleClient() // Game.consoleClient()
+// }
+//
+// const seed = history ? history.shift() : Date.now()
+// Game.play(setup, rules, getScore, playerClients, seed, !history)
+
 let playerClients = {
   'a': Game.randomClient(), // Game.consoleClient(),
-  'b': Game.randomClient() // Game.consoleClient()
+  'b': Game.consoleClient() // Game.consoleClient()
 }
 
-Game.play(setup, rules, getScore, playerClients)
+debugger
+let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
+function update() {
+  gs.update()
+  setTimeout(update, 0)
+}
+update()
