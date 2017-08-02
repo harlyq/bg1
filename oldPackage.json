@@ -3,33 +3,22 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/harlyq/bg1.git"
-  },
   "author": "",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/harlyq/bg1/issues"
-  },
-  "homepage": "https://github.com/harlyq/bg1#readme",
   "devDependencies": {
     "@types/react": "^15.6.0",
-    "@types/react-dom": "^15.5.1",
-    "tape": "^4.8.0",
-    "webpack": "^3.4.1",
-    "webpack-dev-server": "^2.6.1"
+    "tape": "^4.7.0",
+    "webpack": "^3.4.1"
   },
   "dependencies": {
+    "mersenne-twister": "^1.1.0",
     "react": "^15.6.1",
     "react-dom": "^15.6.1",
     "react-transition-group": "^2.2.0",
+    "readline-sync": "^1.4.7",
     "seedrandom": "^2.4.3"
   }
 }

@@ -1,6 +1,10 @@
-import {GameSystem, Game} from './game.js'
+import {BGGame} from './ui/game-ui.js'
+import {GameSystem, Game, IGameState} from './game.js'
 import Util from './util.js'
-let fs = require('fs')
+import * as ReactDOM from "react-dom"
+import * as React from "react"
+
+// let fs = require('fs')
 
 const SUITS = ['H','D','S','C']
 const RANKS = ['2','3','4','5','6','7','8','9','T','J','Q','K','A']
@@ -489,13 +493,16 @@ function getScore(g: Game, player: string): number {
 
 let playerClients = {
   'a': Game.randomClient(), // Game.consoleClient(),
-  'b': Game.consoleClient() // Game.consoleClient()
+  'b': Game.randomClient() // Game.consoleClient()
 }
 
-debugger
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
-function update() {
-  gs.update()
-  setTimeout(update, 0)
-}
-update()
+let bgUI = React.createElement(BGGame, {gamesystem: gs})
+
+// function update() {
+//   gs.update()
+//   setTimeout(update, 0)
+// }
+// update()
+
+ReactDOM.render(bgUI, document.getElementById('content'))

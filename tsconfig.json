@@ -4,6 +4,9 @@
     "removeComments": true,
     "target": "es2015",
     "module": "commonjs",
-    "allowJs": "true"
-  }
+    "baseUrl": "."
+  },
+  "exclude": [
+    "mode_modules"
+  ]
 }

@@ -1,32 +1,32 @@
 import Util from './util.js'
 import Chain from './chain.js'
-import * as ReadlineSync from 'readline-sync'
+// import * as ReadlineSync from 'readline-sync'
 //import * as MersenneTwister from 'mersenne-twister' // HACK not a module
 import * as seedrandom from 'seedrandom'
-let fs = require('fs');
+//let fs = require('fs');
 
-interface Player {
+interface IPlayer {
   name: string
 }
 
-interface Card {
+interface ICard {
   name: string
   value?: any
   [others: string]: any
 }
 
-interface Dice extends Card {
+interface IDice extends ICard {
   faces: any[]
 }
 
-interface Place {
+interface IPlace {
   name: string
   value?: any
   cards?: string[]
   [others: string]: any
 }
 
-type CardPlace = [Place, number]
+type CardPlace = [IPlace, number]
 
 type PickCount = number | number[]
 
@@ -38,7 +38,7 @@ enum Playback {
   RECORD
 }
 
-interface PickCommand {
+interface IPickCommand {
   id: number // starts from 0
   type: string
   who: string
@@ -48,34 +48,28 @@ interface PickCommand {
   conditionArg?: any
 }
 
-interface Snapshot {
-  allCards: {[name: string]: Card}
-  allPlaces: {[name: string]: Card}
-  allValues: {[key: string]: Card}
-}
-
-type CardFilterFn = (Card) => boolean
-type PlaceFilterFn = (Place) => boolean
-type PlayerFilterFn = (Player) => boolean
+type CardFilterFn = (ICard) => boolean
+type PlaceFilterFn = (IPlace) => boolean
+type PlayerFilterFn = (IPlayer) => boolean
 type CardName = string | string[] | CardFilterFn
 type PlaceName = string | string[] | PlaceFilterFn
 type PlayerName = string | string[] | PlayerFilterFn
 type Index = number | number[]
 
-interface Named {
+interface INamed {
   name: string
 }
 
-interface GameOptions {
+export interface IGameOptions {
   debug?: boolean
   saveHistory?: boolean
 }
 
 // must not contain references or classes
-interface GameData {
-  allCards: {[name: string]: Card}
-  allPlaces: {[name: string]: Place}
-  allPlayers: {[name: string]: Player}
+export interface IGameState {
+  allCards: {[name: string]: ICard}
+  allPlaces: {[name: string]: IPlace}
+  allPlayers: {[name: string]: IPlayer}
   allValues: {[key: string]: any}
 }
 
@@ -93,10 +87,10 @@ export class GameSystem {
   rules: any
   scoreFn: (g: Game, playerName: string) => number
   seed: any
-  options: GameOptions = {}
+  options: IGameOptions = {}
   playerClients: any = {}
 
-  constructor(setup, rules, scoreFn, playerClients, options: GameOptions = {}, seed = Date.now(), history: any[] = []) {
+  constructor(setup, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), history: any[] = []) {
     this.setup = setup
     this.rules = rules
     this.scoreFn = scoreFn
@@ -215,7 +209,7 @@ export class GameSystem {
         this.historyIndex = this.history.length
 
         if (this.historyFile) {
-          fs.writeFileSync(this.historyFile, JSON.stringify(this.history))
+          // fs.writeFileSync(this.historyFile, JSON.stringify(this.history))
         }
       }
 
@@ -224,7 +218,7 @@ export class GameSystem {
     }
   }
 
-  private validateChoice(command: PickCommand, result: any[]) {
+  private validateChoice(command: IPickCommand, result: any[]) {
     //Util.assert(!(result instanceof IterableIterator<{}>), 'missing "yield*" before a call to another function')
 
     Util.assert(Array.isArray(result), 'result is not an array')
@@ -242,10 +236,11 @@ export class GameSystem {
     // TODO validate the number of results against the count
     // TODO recursively validate the options (as they may be further commands)
   }
+
 }
 
 export class Game {
-  data: GameData = {
+  data: IGameState = {
     allCards: {},
     allPlaces: {},
     allPlayers: {},
@@ -261,9 +256,9 @@ export class Game {
   playerChain = new Chain()
   seed: number
   private random: seedrandom
-  cacheFindPlace: Place
+  cacheFindPlaceName: string
 
-  constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: GameOptions, seed: number = Date.now()) {
+  constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
     this.setupFn = setupFn
     this.rules = rules
     this.seed = seed
@@ -285,13 +280,17 @@ export class Game {
     }
   }
 
+  public getStateRef(): IGameState {
+    return this.data
+  }
+
   // take a snapshot of the cards, places and values
-  public takeSnapshot(): GameData {
+  public takeSnapshot(): IGameState {
     return Util.copyJSON(this.data)
   }
 
   // rollback the cards, places and values to the last checkpoint
-  public rollbackSnapshot(snapshot: GameData) {
+  public rollbackSnapshot(snapshot: IGameState) {
     this.data = Util.copyJSON(snapshot)
   }
 
@@ -319,7 +318,7 @@ export class Game {
     return this.history
   }
 
-  static filterThings<T>(name: string | string[] | ((Named) => boolean), things: {[name: string]: T & Named}): (T & Named)[] {
+  static filterThings<T>(name: string | string[] | ((INamed) => boolean), things: {[name: string]: T & INamed}): (T & INamed)[] {
     if (typeof name === 'function') {
       let results = []
       for (let key in things) {
@@ -361,7 +360,7 @@ export class Game {
     return this.registeredConditions.length - 1
   }
 
-  public filterCards(cardName: CardName): Card[] {
+  public filterCards(cardName: CardName): ICard[] {
     return Game.filterThings(cardName, this.data.allCards)
   }
 
@@ -369,21 +368,21 @@ export class Game {
     return Game.filterThings(cardName, this.data.allCards).map(p => p.name)
   }
 
-  public getCardByName(cardName: string): Card {
+  public getCardByName(cardName: string): ICard {
     return this.data.allCards[cardName]
   }
 
-  public getPlaceByName(placeName: string): Place {
+  public getPlaceByName(placeName: string): IPlace {
     return this.data.allPlaces[placeName]
   }
 
-  public getPlayerByName(playerName: string): Player {
+  public getPlayerByName(playerName: string): IPlayer {
     return this.data.allPlayers[playerName]
   }
 
-  public getCards(placeName: PlaceName): Card[] {
-    const places: Place[] = Game.filterThings(placeName, this.data.allPlaces)
-    let cards: Card[] = []
+  public getCards(placeName: PlaceName): ICard[] {
+    const places: IPlace[] = Game.filterThings(placeName, this.data.allPlaces)
+    let cards: ICard[] = []
     for (let place of places) {
       for (let cardName of place.cards) {
         cards.push(this.getCardByName(cardName))
@@ -397,7 +396,7 @@ export class Game {
   }
 
   public getCardCount(placeName: PlaceName): number {
-    const places: Place[] = Game.filterThings(placeName, this.data.allPlaces)
+    const places: IPlace[] = Game.filterThings(placeName, this.data.allPlaces)
     let length = 0
     for (let place of places) {
       length += place.cards.length
@@ -405,7 +404,7 @@ export class Game {
     return length
   }
 
-  public filterPlaces(placeName: PlaceName): Place[] {
+  public filterPlaces(placeName: PlaceName): IPlace[] {
     return Game.filterThings(placeName, this.data.allPlaces)
   }
 
@@ -413,7 +412,7 @@ export class Game {
     return Game.filterThings(placeName, this.data.allPlayers).map(p => p.name)
   }
 
-  public filterPlayers(playerName: PlayerName): Player[] {
+  public filterPlayers(playerName: PlayerName): IPlayer[] {
     return Game.filterThings(playerName, this.data.allPlayers)
   }
 
@@ -437,7 +436,7 @@ export class Game {
   //   }
   // }
 
-  private findPlace(card: Card): CardPlace {
+  private findPlace(card: ICard): CardPlace {
     const cardName = card.name
 
     // Find can be slow because it searches through every place, but we usually
@@ -445,10 +444,11 @@ export class Game {
     // We could put a place index on each card, but this needs to be maintained
     // and we can't stop users from arbitrarily changing it, so better to
     // always search through all places
-    if (this.cacheFindPlace) {
-      const i = this.cacheFindPlace.cards.indexOf(cardName)
+    if (this.cacheFindPlaceName) {
+      const cacheFindPlace = this.data.allPlaces[this.cacheFindPlaceName]
+      const i = cacheFindPlace.cards.indexOf(cardName)
       if (i !== -1) {
-        return [this.cacheFindPlace, i]
+        return [cacheFindPlace, i]
       }
     }
 
@@ -456,7 +456,7 @@ export class Game {
       const place = this.data.allPlaces[name]
       const i = place.cards.indexOf(cardName)
       if (i !== -1) {
-        this.cacheFindPlace = place
+        this.cacheFindPlaceName = place.name
         return [place, i]
       }
     }
@@ -464,7 +464,7 @@ export class Game {
   }
 
   // NOTE assumes card has already been removed from all places
-  private insertCard(card: Card, to: Place, index: number) {
+  private insertCard(card: ICard, to: IPlace, index: number) {
     if (index === -1 || index >= to.cards.length) {
       to.cards.push(card.name)
     } else {
@@ -472,7 +472,7 @@ export class Game {
     }
   }
 
-  private removeCard(from: Place, index: number): Card {
+  private removeCard(from: IPlace, index: number): ICard {
     if (from.cards.length === 0) {
       return
     }
@@ -483,12 +483,13 @@ export class Game {
     } else {
       cardName = from.cards.splice(index, 1)[0]
     }
+    Util.assert(cardName)
     let card = this.getCardByName(cardName)
     return card
   }
 
-  public addPlayer(player: Player): Game {
-    Util.assert(!this.data.allPlayers[player.name], `Card (${player.name}) already exists`)
+  public addPlayer(player: IPlayer): Game {
+    Util.assert(!this.data.allPlayers[player.name], `ICard (${player.name}) already exists`)
     this.data.allPlayers[player.name] = player
     this.playerChain.add(player.name)
     return this
@@ -498,15 +499,15 @@ export class Game {
     return this.playerChain.getLength()
   }
 
-  private addPlaceInternal(place: Place) {
-    Util.assert(!this.data.allPlaces[place.name], `Place (${place.name}) already exists`)
+  private addPlaceInternal(place: IPlace) {
+    Util.assert(!this.data.allPlaces[place.name], `IPlace (${place.name}) already exists`)
     this.data.allPlaces[place.name] = place
     if (!Array.isArray(place.cards)) {
       place.cards = []
     }
   }
 
-  public addPlace(place: Place | Place[]): Game {
+  public addPlace(place: IPlace | IPlace[]): Game {
     // TODO assert that place.name is unique??
     if (Array.isArray(place)) {
       for (let p of place) {
@@ -518,13 +519,13 @@ export class Game {
     return this
   }
 
-  private addCardInternal(card: Card, to: Place, index: number) {
-    Util.assert(!this.data.allCards[card.name], `Card (${card.name}) already exists`)
+  private addCardInternal(card: ICard, to: IPlace, index: number) {
+    Util.assert(!this.data.allCards[card.name], `ICard (${card.name}) already exists`)
     this.insertCard(card, to, index)
     this.data.allCards[card.name] = card
   }
 
-  public addCard(card: Card | Card[], to: Place, index: number = -1): Game {
+  public addCard(card: ICard | ICard[], to: IPlace, index: number = -1): Game {
     // TODO assert that card.name is unique??
     if (Array.isArray(card)) {
       for (let c of card) {
@@ -536,7 +537,7 @@ export class Game {
     return this
   }
 
-  // public addDice(dice: Dice | Dice[], to: Place, index: number = -1): Game {
+  // public addDice(dice: IDice | IDice[], to: IPlace, index: number = -1): Game {
   //   dice = Array.isArray(dice) ? dice : [dice]
   //
   //   for (let d of dice) {
@@ -551,9 +552,9 @@ export class Game {
   // index -1 represents the top, 0 is the bottom
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
-  public moveCards(cardName: CardName, toName: PlaceName, count: number = -1, toIndex: Index = -1): Card[] {
-    const cards: Card[] = this.filterCards(cardName)
-    const tos: Place[] = this.filterPlaces(toName)
+  public moveCards(cardName: CardName, toName: PlaceName, count: number = -1, toIndex: Index = -1): ICard[] {
+    const cards: ICard[] = this.filterCards(cardName)
+    const tos: IPlace[] = this.filterPlaces(toName)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
     Util.assert(cards.length > 0, `unable to find cards "${cardName}"`)
@@ -586,9 +587,9 @@ export class Game {
 
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
-  public move(fromName: PlaceName, toName: PlaceName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): Card[] {
-    const froms: Place[] = this.filterPlaces(fromName)
-    const tos: Place[] = this.filterPlaces(toName)
+  public move(fromName: PlaceName, toName: PlaceName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): ICard[] {
+    const froms: IPlace[] = this.filterPlaces(fromName)
+    const tos: IPlace[] = this.filterPlaces(toName)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
@@ -676,7 +677,7 @@ export class Game {
       const places = this.filterPlaces(name)
       if (places.length > 0) {
         for (let card of places[0].cards) {
-          let dice = this.data.allCards[card] as Dice
+          let dice = this.data.allCards[card] as IDice
           if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
             dice.value = dice.faces[this.randomInt(0, dice.faces.length)]
           }
@@ -721,7 +722,7 @@ export class Game {
   //   return {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)}
   // }
 
-  public validateResult(command: PickCommand, result: any[]) {
+  public validateResult(command: IPickCommand, result: any[]) {
     Util.assert(!(result instanceof Promise), 'missing "await" before pick command')
 
     Util.assert(Array.isArray(result), 'result is not an array')
@@ -762,51 +763,51 @@ export class Game {
     return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
   }
 
-  public static consoleClient() {
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[][] {
-      const count = Game.parseCount(command.count, command.options.length)
-      const conditionFn = command.condition >= 0 ? g.registeredConditions[command.condition] : null
+  // public static consoleClient() {
+  //   return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[][] {
+  //     const count = Game.parseCount(command.count, command.options.length)
+  //     const conditionFn = command.condition >= 0 ? g.registeredConditions[command.condition] : null
+  //
+  //     console.log(g.toString())
+  //     if (count[0] === count[1]) {
+  //       console.log(`Select ${count[0]} choice`)
+  //     } else {
+  //       console.log(`Select between ${count[0]} and ${count[1]} choices`)
+  //     }
+  //
+  //     let choices = []
+  //     let hasValidChoice = false
+  //
+  //     while (!hasValidChoice) {
+  //       let options = command.options.slice()
+  //       choices = []
+  //
+  //       while (choices.length < count[1]) {
+  //         let selected = ReadlineSync.keyInSelect(options, 'Which option? ', {cancel: (count[0] === 0) ? 'CANCEL' : false})
+  //         if (selected !== -1) {
+  //           choices.push(options[selected])
+  //           options.splice(selected, 1)
+  //         } else if (choices.length >= count[0]) {
+  //           break
+  //         }
+  //       }
+  //
+  //       // cancelled
+  //       if (choices.length === 0) {
+  //         return []
+  //       }
+  //
+  //       hasValidChoice = !conditionFn || conditionFn(g, command.who, choices, command.conditionArg)
+  //       if (!hasValidChoice) {
+  //         console.log(`choice ${choices} is invalid`)
+  //       }
+  //     }
+  //
+  //     return choices
+  //   }
+  // }
 
-      console.log(g.toString())
-      if (count[0] === count[1]) {
-        console.log(`Select ${count[0]} choice`)
-      } else {
-        console.log(`Select between ${count[0]} and ${count[1]} choices`)
-      }
-
-      let choices = []
-      let hasValidChoice = false
-
-      while (!hasValidChoice) {
-        let options = command.options.slice()
-        choices = []
-
-        while (choices.length < count[1]) {
-          let selected = ReadlineSync.keyInSelect(options, 'Which option? ', {cancel: (count[0] === 0) ? 'CANCEL' : false})
-          if (selected !== -1) {
-            choices.push(options[selected])
-            options.splice(selected, 1)
-          } else if (choices.length >= count[0]) {
-            break
-          }
-        }
-
-        // cancelled
-        if (choices.length === 0) {
-          return []
-        }
-
-        hasValidChoice = !conditionFn || conditionFn(g, command.who, choices, command.conditionArg)
-        if (!hasValidChoice) {
-          console.log(`choice ${choices} is invalid`)
-        }
-      }
-
-      return choices
-    }
-  }
-
-  private static getValidCombinations(g: Game, command: PickCommand): string[][] {
+  private static getValidCombinations(g: Game, command: IPickCommand): string[][] {
     const n = command.options.length
     const count = Game.parseCount(command.count, n)
 
@@ -830,7 +831,7 @@ export class Game {
   // TODO separate this random from the games random (maybe have a random in game)
   public static randomClient() {
 
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
       let combinations = Game.getValidCombinations(g, command)
       if (combinations.length === 0) {
         return [] // no options, exit
@@ -843,7 +844,7 @@ export class Game {
 
   // public static bruteForceClient(depth: number): any {
   //
-  //   return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+  //   return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
   //     let scores = Game.exhaustiveScoreOptions(g, command.id, command.options, command.who, scoreFn, depth)
   //     let count = Game.parseCount(command.count)
   //
@@ -859,7 +860,7 @@ export class Game {
   // TODO depth may be better as a number of rounds, rather than a number of questions
   public static monteCarloClient(depth: number, iterations: number): any {
 
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
       // this pick combination list will be used at the beginning of all trials
       const pickCombinations = Game.getValidCombinations(g, command)
       const n = pickCombinations.length
@@ -912,7 +913,7 @@ export class Game {
   }
 
   public static historyClient(history: string[][]): any {
-    return function(g: Game, command: PickCommand, scoreFn: (Game, string) => number): string[] {
+    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
       console.log(g.toString())
       if (history.length === 0) {
         console.log('history completed')
@@ -1003,6 +1004,20 @@ export class Game {
     })
 
     return scores
+  }
+
+  public validateData() {
+    for (let cardName in this.data.allCards) {
+      let found = ''
+      for (let placeName in this.data.allPlaces) {
+        const place = this.data.allPlaces[placeName]
+        const i = place.cards.indexOf(cardName)
+        if (i !== -1) {
+          Util.assert(found === '')
+          found = placeName
+        }
+      }
+    }
   }
 
 }
