@@ -1,4 +1,4 @@
-import {BGGame} from './ui/game-ui.js'
+import {BGGame, BGHistory} from './ui/game-ui.js'
 import {GameSystem, Game, IGameState} from './game.js'
 import Util from './util.js'
 import * as ReactDOM from "react-dom"
@@ -497,7 +497,7 @@ let playerClients = {
 }
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
-let bgUI = React.createElement(BGGame, {gamesystem: gs})
+let bgGameUI = React.createElement(BGGame, {gamesystem: gs})
 
 // function update() {
 //   gs.update()
@@ -505,4 +505,4 @@ let bgUI = React.createElement(BGGame, {gamesystem: gs})
 // }
 // update()
 
-ReactDOM.render(bgUI, document.getElementById('content'))
+ReactDOM.render(bgGameUI, document.getElementById('content'))

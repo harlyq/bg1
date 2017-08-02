@@ -98,8 +98,7 @@ export class GameSystem {
     this.options = {...options}
     this.playerClients = {...playerClients}
     this.initGame(setup, rules, scoreFn, playerClients, options, seed)
-    this.history = history.length === 0 ? [seed] : history
-    this.historyIndex = 0
+    this.history = history
     this.playback = Playback.RECORD
   }
 
@@ -109,7 +108,8 @@ export class GameSystem {
     this.itr = rules()
     this.itr.next()
     this.result = this.itr.next(this.g)
-    this.historyFile = options.saveHistory ? `history${seed}.json` : ''
+    // this.historyFile = `history${seed}.json`
+    this.historyIndex = 0
   }
 
   public seek(replayTo: number) {
@@ -167,6 +167,7 @@ export class GameSystem {
     if (this.canRecord()) {
       this.playback = Playback.RECORD
       this.history.length = this.historyIndex
+      this.options.saveHistory = true
     }
   }
 
@@ -201,7 +202,7 @@ export class GameSystem {
       const command = this.result.value
 
       let choice
-      if (this.historyIndex > this.history.length) {
+      if (this.historyIndex < this.history.length) {
         choice = this.history[this.historyIndex++]
       } else {
         choice = this.playerClients[command.who](this.g, command, this.scoreFn)
@@ -264,7 +265,7 @@ export class Game {
     this.seed = seed
     this.random = seedrandom(seed, {state: true})
 
-    this.history.push(seed)
+    //this.history.push(seed)
 
     // TODO where is the best place to do this?
     if (Array.isArray(playerNames)) {

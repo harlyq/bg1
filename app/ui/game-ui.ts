@@ -63,12 +63,13 @@ export class BGGame extends React.Component<IBGGame, {}> {
   render() {
     return (
       h('div', {className: 'bg-game'},
+        h(BGHistory, {gamesystem: this.props.gamesystem}),
         //h(ReactTransitionGroup.TransitionGroup, null,
           Object.keys(this.props.gamesystem.g.data.allPlaces).map(placeName => {
             // Need 'in' to set the state, and 'appear' to make the transition occur when mounted
             const place = this.props.gamesystem.g.data.allPlaces[placeName]
             return h(BGPlace, {name: place.name, cards: place.cards, key: place.name})
-          })
+          }),
         //)
       )
     )
@@ -80,5 +81,45 @@ interface IBGHistory {
 }
 
 export class BGHistory extends React.Component<IBGHistory, {}> {
+  constructor(props?: IBGHistory, context?: any) {
+    super(props, context)
+    this.handleChange = this.handleChange.bind(this)
+    this.handleInput = this.handleInput.bind(this)
+    this.handleNext = this.handleNext.bind(this)
+    this.handlePrevious = this.handlePrevious.bind(this)
+  }
 
+  handleChange(e) {
+    this.props.gamesystem.seek(parseInt(e.target.value))
+  }
+
+  handleInput(e) {
+    this.props.gamesystem.seek(parseInt(e.target.value))
+  }
+
+  handleTogglePause() {
+    this.props.gamesystem.togglePause()
+  }
+
+  handleNext() {
+    this.props.gamesystem.stepForward()
+  }
+
+  handlePrevious() {
+    this.props.gamesystem.stepBack()
+  }
+
+  render() {
+    return (
+      h('div', {className: 'bg-history'},
+        h('button', {onClick: this.handleTogglePause}, 'P'),
+        h('button', {onClick: this.handleNext}, '<'),
+        h('button', {onClick: this.handlePrevious}, '>'),
+        h('input', {
+          type: 'range', min: 0, max: this.props.gamesystem.history.length - 1,
+          onChange: this.handleChange, onInput: this.handleInput
+        })
+      )
+    )
+  }
 }
