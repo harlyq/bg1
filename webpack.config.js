@@ -6,11 +6,16 @@ const PATHS = {
 
 module.exports = {
   entry: {
-    app: `${PATHS.app}/game-canasta.js`,
+    canasta: `${PATHS.app}/canasta/game-canasta.js`,
   },
   output: {
     path: PATHS.app,
-    publicPath: '/app/', // webpack-dev-server will make the output file 'appear' here (note, it is never saved to disk)
+    publicPath: '/app/canasta/', // webpack-dev-server will make the output file 'appear' here (note, it is never saved to disk)
     filename: 'game-canasta-dist.js',
+  },
+  module: {
+    loaders: [
+      { test: /\.css$/, loader: 'style-loader!css-loader' }
+    ]
   }
 }

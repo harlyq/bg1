@@ -1,8 +1,9 @@
-import {BGGame, BGHistory} from './ui/game-ui.js'
-import {GameSystem, Game, IGameState} from './game.js'
-import Util from './util.js'
+import {BGGame, BGHistory} from '../ui/game-ui.js'
+import {GameSystem, Game, IGameState} from '../system/game.js'
+import Util from '../system/util.js'
 import * as ReactDOM from "react-dom"
 import * as React from "react"
+require('./game-canasta.css')
 
 // let fs = require('fs')
 

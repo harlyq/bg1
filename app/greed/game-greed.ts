@@ -1,6 +1,6 @@
-import Game from './game.js'
-import Chain from './chain.js'
-import Util from './util.js'
+import {Game, GameSystem} from '../system/game.js'
+import Chain from '../system/chain.js'
+import Util from '../system/util.js'
 
 // for rendering need a shape for a die, with sides in a particular format
 // e.g. [1,2,3,4,5,6] 1 is opposite 6, 2 opposite 5 and 3 opposite 4
@@ -169,7 +169,7 @@ function getScore(g: Game, player: string) {
 
 let playerClients = {
   'a': Game.monteCarloClient(5,10),
-  'b': Game.consoleClient() // Game.randomClient()
+  'b': Game.randomClient()
 }
 
 Game.play(setup, rules, getScore, playerClients)

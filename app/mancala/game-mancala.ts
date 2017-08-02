@@ -1,6 +1,9 @@
-import {Game} from './game.js'
-import Util from './util.js'
-import Chain from './chain.js'
+import {Game, GameSystem} from '../system/game.js'
+import Util from '../system/util.js'
+import Chain from '../system/chain.js'
+import * as React from 'react'
+import * as ReactDOM from 'react-dom'
+import {BGGame} from '../ui/game-ui.js'
 
 const playerPits = {
   a: ['a1','a2','a3','a4','a5','a6'],
@@ -145,10 +148,21 @@ function findWinner(g: Game): string {
 }
 
 // TODO move the play logic some
-let playerClient = {
+const playerClients = {
   'a': Game.monteCarloClient(5, 100),
   'b': Game.randomClient() //Game.monteCarloClient(10, 1000) // Game.consoleClient()
 }
-Game.play(setup, rules, getScore, playerClient)
+// Game.play(setup, rules, getScore, playerClient)
 
-Util.quitOnCtrlBreak()
+// Util.quitOnCtrlBreak()
+
+let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
+let bgGameUI = React.createElement(BGGame, {gamesystem: gs})
+
+// function update() {
+//   gs.update()
+//   setTimeout(update, 0)
+// }
+// update()
+
+ReactDOM.render(bgGameUI, document.getElementById('content'))

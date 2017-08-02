@@ -1,4 +1,4 @@
-import {Game, GameSystem, IGameState, IGameOptions} from "../game.js"
+import {Game, GameSystem, IGameState, IGameOptions} from "../system/game.js"
 import * as React from "react"
 import * as ReactDom from "react-dom"
 import * as ReactTransitionGroup from "react-transition-group"
@@ -28,7 +28,7 @@ class BGPlace extends React.Component<IBGPlace, {}> {
     return (
       h('div', {className: 'bg-place'},
         h('div', null, this.props.name),
-        this.props.cards.map(cardName =>
+        this.props.cards.slice().reverse().map(cardName =>
           h(BGCard, {name: cardName, key: cardName})
         )
       )
@@ -87,6 +87,7 @@ export class BGHistory extends React.Component<IBGHistory, {}> {
     this.handleInput = this.handleInput.bind(this)
     this.handleNext = this.handleNext.bind(this)
     this.handlePrevious = this.handlePrevious.bind(this)
+    this.handleTogglePause = this.handleTogglePause.bind(this)
   }
 
   handleChange(e) {
