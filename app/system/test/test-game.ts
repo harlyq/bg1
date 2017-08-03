@@ -1,6 +1,6 @@
 import * as Tape from 'Tape'
-import {Game} from '../app/game.js'
-import Util from '../app/util.js'
+import {Game} from '../game.js'
+import Util from '../util.js'
 
 Tape.test('add player', (test) => {
   let g = new Game()
