@@ -193,7 +193,7 @@ function* turn(g:Game, player: string) {
 
 function* draw(g: Game, player: string, team: string) {
   const discards = g.getCardNames('discard')
-  Util.assert(discards.length > 0)
+  console.assert(discards.length > 0)
 
   const playerHand = g.getCardNames(`${player}_hand`)
   const playerHandBuckets = Util.countBuckets(playerHand, c => getCardRank(c))
@@ -234,7 +234,7 @@ function* draw(g: Game, player: string, team: string) {
 
     const discardMeldPlace = `team${team}_meld_${topDiscardRank}`
     const discardCard = g.move('discard', discardMeldPlace, 1)
-    Util.assert(discardCard[0].name === topDiscard)
+    console.assert(discardCard[0].name === topDiscard)
 
     if (g.getCardCount(discardMeldPlace) < MIN_MELD_SIZE) {
       const oldMeldScore = getMeldScore(g, player)
@@ -384,7 +384,7 @@ function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOp
 
     if (doMeld) {
       const meldPlaces = getMeldPlaces(g, player, cards)
-      Util.assert(meldPlaces)
+      console.assert(meldPlaces.length > 0)
 
       g.debugLog(`Player ${player} choose places to meld:`)
       const places = yield g.pick(player, meldPlaces, 1)
@@ -417,7 +417,7 @@ function* discard(g: Game, player: string, team: string) {
   // TODO prohibit cancel on this pick
   g.debugLog(`Player ${player} choose a card to discard:`)
   const cards = yield g.pick(player, g.getCardNames(`${player}_hand`), 1)
-  Util.assert(cards.length === 1)
+  console.assert(cards.length === 1)
 
   // TODO handle rotation of wild cards - this is a UI problem, not a rules problem
   const discards = g.getCardNames('discard')

@@ -122,7 +122,7 @@ function* round(g: Game, player: string) {
         endTurn = true
       } else {
         score += calculateScore(g.filterCards(scorePicks))
-        Util.assert(score > 0, 'scorePicks are invalid')
+        console.assert(score > 0, 'scorePicks are invalid')
         g.moveCards(scorePicks, 'score', -1)
       }
     }

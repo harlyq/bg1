@@ -220,18 +220,18 @@ export class GameSystem {
   }
 
   private validateChoice(command: IPickCommand, result: any[]) {
-    //Util.assert(!(result instanceof IterableIterator<{}>), 'missing "yield*" before a call to another function')
+    //console.assert(!(result instanceof IterableIterator<{}>), 'missing "yield*" before a call to another function')
 
-    Util.assert(Array.isArray(result), 'result is not an array')
+    console.assert(Array.isArray(result), 'result is not an array')
 
     for (let i = 0; i < result.length; ++i) {
       // this may be due to global variables for not using the Game.random() functions
-      Util.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
+      console.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
     }
 
     if (result.length > 0 && command.condition >= 0) {
       const conditionFn = this.g.registeredConditions[command.condition]
-      Util.assert(conditionFn(this.g, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
+      console.assert(conditionFn(this.g, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
     }
 
     // TODO validate the number of results against the count
@@ -484,13 +484,13 @@ export class Game {
     } else {
       cardName = from.cards.splice(index, 1)[0]
     }
-    Util.assert(cardName)
+    console.assert(cardName)
     let card = this.getCardByName(cardName)
     return card
   }
 
   public addPlayer(player: IPlayer): Game {
-    Util.assert(!this.data.allPlayers[player.name], `ICard (${player.name}) already exists`)
+    console.assert(!this.data.allPlayers[player.name], `ICard (${player.name}) already exists`)
     this.data.allPlayers[player.name] = player
     this.playerChain.add(player.name)
     return this
@@ -501,7 +501,7 @@ export class Game {
   }
 
   private addPlaceInternal(place: IPlace) {
-    Util.assert(!this.data.allPlaces[place.name], `IPlace (${place.name}) already exists`)
+    console.assert(!this.data.allPlaces[place.name], `IPlace (${place.name}) already exists`)
     this.data.allPlaces[place.name] = place
     if (!Array.isArray(place.cards)) {
       place.cards = []
@@ -521,7 +521,7 @@ export class Game {
   }
 
   private addCardInternal(card: ICard, to: IPlace, index: number) {
-    Util.assert(!this.data.allCards[card.name], `ICard (${card.name}) already exists`)
+    console.assert(!this.data.allCards[card.name], `ICard (${card.name}) already exists`)
     this.insertCard(card, to, index)
     this.data.allCards[card.name] = card
   }
@@ -558,8 +558,8 @@ export class Game {
     const tos: IPlace[] = this.filterPlaces(toName)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
-    Util.assert(cards.length > 0, `unable to find cards "${cardName}"`)
-    Util.assert(tos.length > 0, `unable to find tos "${toName}"`)
+    console.assert(cards.length > 0, `unable to find cards "${cardName}"`)
+    console.assert(tos.length > 0, `unable to find tos "${toName}"`)
 
     if (count === -1) {
       count = cards.length
@@ -572,7 +572,7 @@ export class Game {
     for (let card of cards) {
       const [fromPlace, fromIndex] = this.findPlace(card)
       const cardRemoved = this.removeCard(fromPlace, fromIndex)
-      Util.assert(card === cardRemoved)
+      console.assert(card === cardRemoved)
 
       this.insertCard(card, tos[iTo], toIndices[iToIndex])
 
@@ -594,8 +594,8 @@ export class Game {
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
-    Util.assert(froms.length > 0, `unable to find froms "${fromName}"`)
-    Util.assert(tos.length > 0, `unable to find tos "${toName}"`)
+    console.assert(froms.length > 0, `unable to find froms "${fromName}"`)
+    console.assert(tos.length > 0, `unable to find tos "${toName}"`)
 
     let cardCount = 0
     for (let from of froms) {
@@ -617,7 +617,7 @@ export class Game {
     do {
       // if we try to remove and insert from within a place, then the
       // indices will not be correct (because we are changing the cards)
-      Util.assert(froms[iFrom] !== tos[iTo] ||
+      console.assert(froms[iFrom] !== tos[iTo] ||
          ((fromIndices[iFromIndex] === 0 || fromIndices[iFromIndex] === -1) &&
          (toIndices[iToIndex] === 0 || toIndices[iToIndex] === -1)))
 
@@ -653,7 +653,7 @@ export class Game {
 
     for (let name of placeNames) {
       const places = this.filterPlaces(name) // should only have 0 or 1 entries
-      Util.assert(places.length > 0, `unable to find place - ${name}`)
+      console.assert(places.length > 0, `unable to find place - ${name}`)
       this.fisherYates(places[0].cards)
     }
     return this
@@ -724,18 +724,18 @@ export class Game {
   // }
 
   public validateResult(command: IPickCommand, result: any[]) {
-    Util.assert(!(result instanceof Promise), 'missing "await" before pick command')
+    console.assert(!(result instanceof Promise), 'missing "await" before pick command')
 
-    Util.assert(Array.isArray(result), 'result is not an array')
+    console.assert(Array.isArray(result), 'result is not an array')
 
     for (let i = 0; i < result.length; ++i) {
       // this may be due to global variables for not using the Game.random() functions
-      Util.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
+      console.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
     }
 
     if (result.length > 0 && command.condition >= 0) {
       const conditionFn = this.registeredConditions[command.condition]
-      Util.assert(conditionFn(this, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
+      console.assert(conditionFn(this, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
     }
 
     // TODO validate the number of results against the count
@@ -1014,7 +1014,7 @@ export class Game {
         const place = this.data.allPlaces[placeName]
         const i = place.cards.indexOf(cardName)
         if (i !== -1) {
-          Util.assert(found === '')
+          console.assert(found === '')
           found = placeName
         }
       }
