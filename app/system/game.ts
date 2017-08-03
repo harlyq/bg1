@@ -115,9 +115,11 @@ export class GameSystem {
   public seek(replayTo: number) {
     // restart the game, and seek to the desired position
     // always need to start from the beginning for the iterator to work correctly
-    this.initGame(this.setup, this.rules, this.scoreFn, this.playerClients, this.options, this.seed)
-    this.playback = Playback.PLAY
+    if (!this.historyIndex || replayTo < this.historyIndex) {
+      this.initGame(this.setup, this.rules, this.scoreFn, this.playerClients, this.options, this.seed)
+    }
 
+    this.playback = Playback.PLAY
     replayTo = Math.min(replayTo, this.history.length)
     while (!this.result.done && this.historyIndex < replayTo) {
       this.update()
@@ -182,7 +184,7 @@ export class GameSystem {
   }
 
   public canStepForward(): boolean {
-    return this.playback === Playback.PAUSE && this.historyIndex < this.history.length - 1
+    return this.playback === Playback.PAUSE && this.historyIndex < this.history.length
   }
 
   public stepForward() {
@@ -216,6 +218,8 @@ export class GameSystem {
 
       this.validateChoice(command, choice)
       this.result = this.itr.next(choice)
+    } else {
+      this.playback = Playback.PAUSE
     }
   }
 
@@ -484,7 +488,7 @@ export class Game {
     } else {
       cardName = from.cards.splice(index, 1)[0]
     }
-    console.assert(cardName)
+    console.assert(cardName.length > 0)
     let card = this.getCardByName(cardName)
     return card
   }

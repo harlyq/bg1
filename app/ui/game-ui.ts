@@ -29,12 +29,13 @@ export const BGHistory = {
     return (
       m('.bg-history',
         m('button', {onclick: () => gamesystem.togglePause()}, 'P'),
-        m('button', {onclick: () => gamesystem.stepForward()}, '<'),
-        m('button', {onclick: () => gamesystem.stepBack()}, '>'),
-        m('input', {
+        m('button', {onclick: () => gamesystem.stepBack()}, '<'),
+        m('button', {onclick: () => gamesystem.stepForward()}, '>'),
+        m('input.bg-history-slider', {
           type: 'range',
           min: 0,
-          max: gamesystem.history.length - 1,
+          max: gamesystem.history.length,
+          value: gamesystem.historyIndex,
           onchange: (e) => gamesystem.seek(parseInt(e.target.value)),
           oninput: (e) => gamesystem.seek(parseInt(e.target.value))
         })
