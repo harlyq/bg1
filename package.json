@@ -20,8 +20,7 @@
   },
   "homepage": "https://github.com/harlyq/bg1#readme",
   "devDependencies": {
-    "@types/react": "^15.6.0",
-    "@types/react-dom": "^15.5.1",
+    "@types/mithril": "^1.1.7",
     "css-loader": "^0.28.4",
     "style-loader": "^0.18.2",
     "tape": "^4.8.0",
@@ -29,9 +28,6 @@
     "webpack-dev-server": "^2.6.1"
   },
   "dependencies": {
-    "react": "^15.6.1",
-    "react-dom": "^15.6.1",
-    "react-transition-group": "^2.2.0",
     "seedrandom": "^2.4.3"
   }
 }

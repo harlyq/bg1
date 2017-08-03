@@ -1,8 +1,9 @@
 import {BGGame, BGHistory} from '../ui/game-ui.js'
 import {GameSystem, Game, IGameState} from '../system/game.js'
 import Util from '../system/util.js'
-import * as ReactDOM from "react-dom"
-import * as React from "react"
+import * as m from "mithril"
+
+declare function require(name: string): string;
 require('./game-canasta.css')
 
 // let fs = require('fs')
@@ -498,12 +499,16 @@ let playerClients = {
 }
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
-let bgGameUI = React.createElement(BGGame, {gamesystem: gs})
+const content = document.getElementById('content')
 
-// function update() {
-//   gs.update()
-//   setTimeout(update, 0)
-// }
-// update()
+function update() {
+   gs.update()
+   m.render(content, m(BGGame, {gamesystem: gs}))
+   setTimeout(update, 0)
+}
+update()
 
-ReactDOM.render(bgGameUI, document.getElementById('content'))
+// let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
+// let bgGameUI = React.createElement(BGGame, {gamesystem: gs})
+//
+// ReactDOM.render(bgGameUI, document.getElementById('content'))

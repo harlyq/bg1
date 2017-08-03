@@ -1,0 +1,28 @@
+.bg-card {
+  display: flex;
+  background-color: lightGreen;
+  justify-content: center;
+  align-items: center;
+  width: 50px;
+  height: 50px;
+  outline: 1px solid black;
+  margin: 5px;
+  user-select: none;
+}
+
+.bg-place {
+  display: flex;
+  background-color: lightBlue;
+  color: darkBlue;
+  outline: 1px solid darkBlue;
+  padding: 5px;
+}
+
+.fade-appear {
+  opacity: 0.01;
+  transition: opacity 2s;
+}
+
+.fade-appear.fade-appear-active {
+  opacity: 1;
+}

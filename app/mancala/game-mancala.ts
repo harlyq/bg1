@@ -1,9 +1,11 @@
 import {Game, GameSystem} from '../system/game.js'
 import Util from '../system/util.js'
 import Chain from '../system/chain.js'
-import * as React from 'react'
-import * as ReactDOM from 'react-dom'
+import * as m from 'mithril'
 import {BGGame} from '../ui/game-ui.js'
+
+declare function require(name: string): string;
+require('./game-mancala.css')
 
 const playerPits = {
   a: ['a1','a2','a3','a4','a5','a6'],
@@ -48,7 +50,7 @@ function* rules() {
   if (g.options.debug) {
     console.log(g.toString())
     console.log(winResult)
-    Util.quit()
+    // Util.quit()
   }
 }
 
@@ -157,12 +159,11 @@ const playerClients = {
 // Util.quitOnCtrlBreak()
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
-let bgGameUI = React.createElement(BGGame, {gamesystem: gs})
+const content = document.getElementById('content')
 
-// function update() {
-//   gs.update()
-//   setTimeout(update, 0)
-// }
-// update()
-
-ReactDOM.render(bgGameUI, document.getElementById('content'))
+function update() {
+   gs.update()
+   m.render(content, m(BGGame, {gamesystem: gs}))
+   setTimeout(update, 0)
+}
+update()
