@@ -38,7 +38,7 @@ enum Playback {
   RECORD
 }
 
-interface IPickCommand {
+export interface IPickCommand {
   id: number // starts from 0
   type: string
   who: string
@@ -193,7 +193,7 @@ export class GameSystem {
     }
   }
 
-  public update() {
+  public async update() {
     if (this.playback === Playback.PAUSE) {
       return
     } else if (this.playback === Playback.PLAY && this.historyIndex >= this.history.length) {
@@ -201,13 +201,13 @@ export class GameSystem {
     }
 
     if (!this.result.done) {
-      const command = this.result.value
+      const command: IPickCommand = this.result.value
 
       let choice
       if (this.historyIndex < this.history.length) {
         choice = this.history[this.historyIndex++]
       } else {
-        choice = this.playerClients[command.who](this.g, command, this.scoreFn)
+        choice = await this.playerClients[command.who](this.g, command, this.scoreFn)
         this.history.push(choice)
         this.historyIndex = this.history.length
 
@@ -706,6 +706,7 @@ export class Game {
     return str
   }
 
+  // TODO provide an enum for the type
   public pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
     return {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
@@ -836,7 +837,7 @@ export class Game {
   // TODO separate this random from the games random (maybe have a random in game)
   public static randomClient() {
 
-    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
+    return async function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number) {
       let combinations = Game.getValidCombinations(g, command)
       if (combinations.length === 0) {
         return [] // no options, exit

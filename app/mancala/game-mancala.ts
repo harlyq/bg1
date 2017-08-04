@@ -1,4 +1,4 @@
-import {Game, GameSystem} from '../system/game.js'
+import {IPickCommand, Game, GameSystem} from '../system/game.js'
 import Util from '../system/util.js'
 import Chain from '../system/chain.js'
 import * as m from 'mithril'
@@ -151,19 +151,30 @@ function findWinner(g: Game): string {
 
 // TODO move the play logic some
 const playerClients = {
-  'a': Game.monteCarloClient(5, 100),
-  'b': Game.randomClient() //Game.monteCarloClient(10, 1000) // Game.consoleClient()
+  'a': Game.randomClient(), //Game.monteCarloClient(5, 100),
+  'b': uiClient, //Game.randomClient(), //Game.monteCarloClient(10, 1000), // Game.consoleClient(),
 }
 // Game.play(setup, rules, getScore, playerClient)
 
 // Util.quitOnCtrlBreak()
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
+let pickCommand
+let pickCallback
 const content = document.getElementById('content')
 
 function update() {
    gs.update()
-   m.render(content, m(BGGame, {gamesystem: gs}))
-   setTimeout(update, 0)
+   m.render(content, m(BGGame, {gamesystem: gs, command: pickCommand, callback: pickCallback}))
+   requestAnimationFrame(update) // TODO we only need to do this when something changes
 }
 update()
+
+// TODO wip
+async function uiClient(g: Game, command: IPickCommand, scoreFn: (g: Game, options: string[]) => boolean) {
+  pickCommand = command
+  return new Promise(resolve => {
+    pickCallback = resolve
+  })
+  //requestAnimationFrame(update)
+}

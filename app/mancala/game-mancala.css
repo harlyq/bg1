@@ -1,6 +1,6 @@
 .bg-card {
   display: flex;
-  background-color: lightGreen;
+  background-color: lightYellow;
   justify-content: center;
   align-items: center;
   width: 50px;
@@ -8,6 +8,7 @@
   outline: 1px solid black;
   margin: 5px;
   user-select: none;
+  transition: transform 1s ease-out;
 }
 
 .bg-place {
@@ -16,6 +17,26 @@
   color: darkBlue;
   outline: 1px solid darkBlue;
   padding: 5px;
+}
+
+.bg-place.can-pick {
+  background-color: lightGreen;
+}
+
+.bg-place.picked {
+  background-color: pink;
+}
+
+.bg-place.picked:focus {
+  background-color: red;
+}
+
+.bg-place.can-pick:focus {
+  background-color: green;
+}
+
+.bg-history-slider {
+  width: 80%
 }
 
 .fade-appear {
