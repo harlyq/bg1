@@ -1,5 +1,5 @@
 import * as Tape from 'tape'
-import Util from '../util.js'
+import Util from '../util'
 
 Tape('test getCombinations', t => {
   let combo0 = Util.getCombinations([2,4,6,-1], 0)

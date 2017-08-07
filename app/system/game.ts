@@ -1,5 +1,5 @@
-import Util from './util.js'
-import Chain from './chain.js'
+import Util from './util'
+import Chain from './chain'
 // import * as ReadlineSync from 'readline-sync'
 //import * as MersenneTwister from 'mersenne-twister' // HACK not a module
 import * as seedrandom from 'seedrandom'
@@ -925,7 +925,6 @@ export class Game {
         console.log('history completed')
         Util.quit()
       }
-      debugger
       return history.shift()
     }
   }

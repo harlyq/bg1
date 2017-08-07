@@ -1,5 +1,5 @@
 import * as Tape from 'tape'
-import Chain from '../chain.js'
+import Chain from '../chain'
 
 Tape('test length', t => {
   let chain1 = new Chain()

@@ -1,10 +1,10 @@
-import {BGGame, BGHistory} from '../ui/game-ui.js'
-import {GameSystem, Game, IGameState} from '../system/game.js'
-import Util from '../system/util.js'
+import {BGGame, BGHistory} from '../ui/game-ui'
+import {GameSystem, Game, IGameState} from '../system/game'
+import Util from '../system/util'
 import * as m from "mithril"
 
 declare function require(name: string): string;
-require('./game-canasta.css')
+require('../../app/canasta/game-canasta.css') // TODO fix this path
 
 // let fs = require('fs')
 

@@ -1,11 +1,11 @@
-import {IPickCommand, Game, GameSystem} from '../system/game.js'
-import Util from '../system/util.js'
-import Chain from '../system/chain.js'
+import {IPickCommand, Game, GameSystem} from '../system/game'
+import Util from '../system/util'
+import Chain from '../system/chain'
 import * as m from 'mithril'
-import {BGGame} from '../ui/game-ui.js'
+import {BGGame} from '../ui/game-ui'
 
 declare function require(name: string): string;
-require('./game-mancala.css')
+require('../../app/mancala/game-mancala.css') // TODO fix this crazy path
 
 const playerPits = {
   a: ['a1','a2','a3','a4','a5','a6'],

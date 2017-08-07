@@ -4,9 +4,13 @@
     "removeComments": true,
     "target": "es2015",
     "module": "commonjs",
-    "baseUrl": "."
-  },
-  "exclude": [
-    "mode_modules"
-  ]
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "paths": {
+      "*": [
+        "*",
+        "dist/*"
+      ]
+    }
+  }
 }

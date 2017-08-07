@@ -7,13 +7,14 @@ const PATHS = {
 
 module.exports = {
   entry: {
-    canasta: `${PATHS.app}/canasta/game-canasta.js`,
-    mancala: `${PATHS.app}/mancala/game-mancala.js`,
+    'game-canasta': `${PATHS.dist}/canasta/game-canasta.js`,
+    'game-mancala': `${PATHS.dist}/mancala/game-mancala.js`,
+    'test-ui': `${PATHS.dist}/ui/test/test-ui.js`,
   },
   output: {
     path: PATHS.dist,
     publicPath: '/dist/', // webpack-dev-server will make the output file 'appear' here (note, it is never saved to disk)
-    filename: 'game-[name]-dist.js',
+    filename: '[name]-dist.js',
   },
   module: {
     loaders: [
