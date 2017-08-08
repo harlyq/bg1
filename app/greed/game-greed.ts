@@ -1,6 +1,7 @@
-import {Game, GameSystem} from '../system/game.js'
-import Chain from '../system/chain.js'
-import Util from '../system/util.js'
+import {Game} from '../system/game'
+import {GameSystem} from '../system/gamesystem'
+import Chain from '../system/chain'
+import Util from '../system/util'
 
 // for rendering need a shape for a die, with sides in a particular format
 // e.g. [1,2,3,4,5,6] 1 is opposite 6, 2 opposite 5 and 3 opposite 4

@@ -8,7 +8,6 @@ Tape('test getCombinations', t => {
   let combo3 = Util.getCombinations([2,4,6,-1], 3)
   let combo4 = Util.getCombinations([2,4,6,-1], 4)
   let combo5 = Util.getCombinations([2,4,6,-1], 1, 2)
-  debugger
   let combo6 = Util.getCombinations([2,4,6,-1], 1, 1, (xs => (xs[0]%2 === 0))) // only even numbers
 
   t.deepEqual(combo0, [[]], 'empty combo')

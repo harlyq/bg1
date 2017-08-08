@@ -1,4 +1,5 @@
-import {IPickCommand, Game, GameSystem} from '../system/game'
+import {IPickCommand, Game} from '../system/game'
+import {GameSystem} from '../system/gamesystem'
 import Util from '../system/util'
 import Chain from '../system/chain'
 import * as m from 'mithril'
@@ -23,7 +24,7 @@ const pitChain = {
 
 function setup(g: Game) {
   const places = pitNames.map(name => { return {name}})
-  places.map(p => g.addPlace(p))
+  places.map(p => g.addLocation(p))
 
   let stone = 0
   for (let pit = 0; pit < pitCounts.length; ++pit) {
@@ -55,8 +56,8 @@ function* rules() {
 }
 
 function* turn(g: Game, player: string) {
-  const validPlaces = g.filterPlaces(p => p.cards.length > 0 && playerPits[player].indexOf(p.name) >= 0).map(p => p.name)
-  const result: string[] = yield g.pickPlaces(player, validPlaces)
+  const validLocations = g.filterLocations(p => p.cards.length > 0 && playerPits[player].indexOf(p.name) >= 0).map(p => p.name)
+  const result: string[] = yield g.pickLocations(player, validLocations)
 
   if (g.options.debug) {
     console.log(`*** ${player} plays ${result[0]} ***`)

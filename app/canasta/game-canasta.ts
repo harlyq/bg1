@@ -1,5 +1,6 @@
 import {BGGame, BGHistory} from '../ui/game-ui'
-import {GameSystem, Game, IGameState} from '../system/game'
+import {Game, IGameState} from '../system/game'
+import {GameSystem} from '../system/gamesystem'
 import Util from '../system/util'
 import * as m from "mithril"
 

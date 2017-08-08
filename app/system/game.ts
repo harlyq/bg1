@@ -5,38 +5,32 @@ import Chain from './chain'
 import * as seedrandom from 'seedrandom'
 //let fs = require('fs');
 
-interface IPlayer {
+export interface IPlayer {
   name: string
 }
 
-interface ICard {
+export interface ICard {
   name: string
   value?: any
   [others: string]: any
 }
 
-interface IDice extends ICard {
+export interface IDice extends ICard {
   faces: any[]
 }
 
-interface IPlace {
+export interface ILocation {
   name: string
   value?: any
   cards?: string[]
   [others: string]: any
 }
 
-type CardPlace = [IPlace, number]
+type CardLocation = [ILocation, number]
 
 type PickCount = number | number[]
 
 type PickCondition = (g: Game, player: string, list: string[], conditionArg?: any) => boolean
-
-enum Playback {
-  PLAY,
-  PAUSE,
-  RECORD
-}
 
 export interface IPickCommand {
   id: number // starts from 0
@@ -49,10 +43,10 @@ export interface IPickCommand {
 }
 
 type CardFilterFn = (ICard) => boolean
-type PlaceFilterFn = (IPlace) => boolean
+type LocationFilterFn = (ILocation) => boolean
 type PlayerFilterFn = (IPlayer) => boolean
 type CardName = string | string[] | CardFilterFn
-type PlaceName = string | string[] | PlaceFilterFn
+type LocationName = string | string[] | LocationFilterFn
 type PlayerName = string | string[] | PlayerFilterFn
 type Index = number | number[]
 
@@ -68,186 +62,15 @@ export interface IGameOptions {
 // must not contain references or classes
 export interface IGameState {
   allCards: {[name: string]: ICard}
-  allPlaces: {[name: string]: IPlace}
+  allLocations: {[name: string]: ILocation}
   allPlayers: {[name: string]: IPlayer}
   allValues: {[key: string]: any}
-}
-
-export class GameSystem {
-  playback: Playback = Playback.PAUSE
-  oldPlayback: Playback = Playback.PAUSE
-  g: Game
-  itr: any
-  result: any
-  writeHistoryFile: boolean = false
-  historyFile: string = ''
-  history: any[] = []
-  historyIndex: number // curent seek position, or history.length if at the end
-  setup: any
-  rules: any
-  scoreFn: (g: Game, playerName: string) => number
-  seed: any
-  options: IGameOptions = {}
-  playerClients: any = {}
-
-  constructor(setup, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), history: any[] = []) {
-    this.setup = setup
-    this.rules = rules
-    this.scoreFn = scoreFn
-    this.seed = seed
-    this.options = {...options}
-    this.playerClients = {...playerClients}
-    this.initGame(setup, rules, scoreFn, playerClients, options, seed)
-    this.history = history
-    this.playback = Playback.RECORD
-  }
-
-  private initGame(setup, rules, scoreFn, playerClients, options, seed) {
-    this.g = new Game(setup, rules, Object.keys(playerClients), options, seed)
-    this.scoreFn = scoreFn
-    this.itr = rules()
-    this.itr.next()
-    this.result = this.itr.next(this.g)
-    // this.historyFile = `history${seed}.json`
-    this.historyIndex = 0
-  }
-
-  public seek(replayTo: number) {
-    // restart the game, and seek to the desired position
-    // always need to start from the beginning for the iterator to work correctly
-    if (!this.historyIndex || replayTo < this.historyIndex) {
-      this.initGame(this.setup, this.rules, this.scoreFn, this.playerClients, this.options, this.seed)
-    }
-
-    this.playback = Playback.PLAY
-    replayTo = Math.min(replayTo, this.history.length)
-    while (!this.result.done && this.historyIndex < replayTo) {
-      this.update()
-    }
-
-    this.pause()
-  }
-
-  public togglePause() {
-    if (this.playback === Playback.PAUSE) {
-      if (this.oldPlayback === Playback.PLAY) {
-        this.play()
-      } else if (this.oldPlayback === Playback.RECORD) {
-        this.record()
-      }
-    } else {
-      this.pause()
-    }
-  }
-
-  public canPause(): boolean {
-    return this.playback === Playback.PLAY || this.playback === Playback.RECORD
-  }
-
-  public pause() {
-    if (this.canPause()) {
-      this.oldPlayback = this.playback
-      this.playback = Playback.PAUSE
-    }
-  }
-
-  public canPlay(): boolean {
-    return this.playback === Playback.PAUSE
-  }
-
-  public play() {
-    if (this.canPlay()) {
-      this.playback = Playback.PLAY
-    }
-  }
-
-  public canRecord(): boolean {
-    return true
-  }
-
-  public record() {
-    if (this.canRecord()) {
-      this.playback = Playback.RECORD
-      this.history.length = this.historyIndex
-      this.options.saveHistory = true
-    }
-  }
-
-  public canStepBack(): boolean {
-    return this.playback === Playback.PAUSE && this.historyIndex > 0
-  }
-
-  public stepBack() {
-    if (this.canStepBack()) {
-      this.seek(this.historyIndex - 1)
-    }
-  }
-
-  public canStepForward(): boolean {
-    return this.playback === Playback.PAUSE && this.historyIndex < this.history.length
-  }
-
-  public stepForward() {
-    if (this.canStepForward()) {
-      this.seek(this.historyIndex + 1)
-    }
-  }
-
-  public async update() {
-    if (this.playback === Playback.PAUSE) {
-      return
-    } else if (this.playback === Playback.PLAY && this.historyIndex >= this.history.length) {
-      return
-    }
-
-    if (!this.result.done) {
-      const command: IPickCommand = this.result.value
-
-      let choice
-      if (this.historyIndex < this.history.length) {
-        choice = this.history[this.historyIndex++]
-      } else {
-        choice = await this.playerClients[command.who](this.g, command, this.scoreFn)
-        this.history.push(choice)
-        this.historyIndex = this.history.length
-
-        if (this.historyFile) {
-          // fs.writeFileSync(this.historyFile, JSON.stringify(this.history))
-        }
-      }
-
-      this.validateChoice(command, choice)
-      this.result = this.itr.next(choice)
-    } else {
-      this.playback = Playback.PAUSE
-    }
-  }
-
-  private validateChoice(command: IPickCommand, result: any[]) {
-    //console.assert(!(result instanceof IterableIterator<{}>), 'missing "yield*" before a call to another function')
-
-    console.assert(Array.isArray(result), 'result is not an array')
-
-    for (let i = 0; i < result.length; ++i) {
-      // this may be due to global variables for not using the Game.random() functions
-      console.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
-    }
-
-    if (result.length > 0 && command.condition >= 0) {
-      const conditionFn = this.g.registeredConditions[command.condition]
-      console.assert(conditionFn(this.g, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
-    }
-
-    // TODO validate the number of results against the count
-    // TODO recursively validate the options (as they may be further commands)
-  }
-
 }
 
 export class Game {
   data: IGameState = {
     allCards: {},
-    allPlaces: {},
+    allLocations: {},
     allPlayers: {},
     allValues: {}
   }
@@ -261,7 +84,7 @@ export class Game {
   playerChain = new Chain()
   seed: number
   private random: seedrandom
-  cacheFindPlaceName: string
+  cacheFindLocationName: string
 
   constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
     this.setupFn = setupFn
@@ -289,12 +112,12 @@ export class Game {
     return this.data
   }
 
-  // take a snapshot of the cards, places and values
+  // take a snapshot of the cards, locations and values
   public takeSnapshot(): IGameState {
     return Util.copyJSON(this.data)
   }
 
-  // rollback the cards, places and values to the last checkpoint
+  // rollback the cards, locations and values to the last checkpoint
   public rollbackSnapshot(snapshot: IGameState) {
     this.data = Util.copyJSON(snapshot)
   }
@@ -377,18 +200,18 @@ export class Game {
     return this.data.allCards[cardName]
   }
 
-  public getPlaceByName(placeName: string): IPlace {
-    return this.data.allPlaces[placeName]
+  public getLocationByName(placeName: string): ILocation {
+    return this.data.allLocations[placeName]
   }
 
   public getPlayerByName(playerName: string): IPlayer {
     return this.data.allPlayers[playerName]
   }
 
-  public getCards(placeName: PlaceName): ICard[] {
-    const places: IPlace[] = Game.filterThings(placeName, this.data.allPlaces)
+  public getCards(placeName: LocationName): ICard[] {
+    const locations: ILocation[] = Game.filterThings(placeName, this.data.allLocations)
     let cards: ICard[] = []
-    for (let place of places) {
+    for (let place of locations) {
       for (let cardName of place.cards) {
         cards.push(this.getCardByName(cardName))
       }
@@ -396,24 +219,24 @@ export class Game {
     return cards
   }
 
-  public getCardNames(placeName: PlaceName): string[] {
+  public getCardNames(placeName: LocationName): string[] {
     return this.getCards(placeName).map(x => x.name)
   }
 
-  public getCardCount(placeName: PlaceName): number {
-    const places: IPlace[] = Game.filterThings(placeName, this.data.allPlaces)
+  public getCardCount(placeName: LocationName): number {
+    const locations: ILocation[] = Game.filterThings(placeName, this.data.allLocations)
     let length = 0
-    for (let place of places) {
+    for (let place of locations) {
       length += place.cards.length
     }
     return length
   }
 
-  public filterPlaces(placeName: PlaceName): IPlace[] {
-    return Game.filterThings(placeName, this.data.allPlaces)
+  public filterLocations(placeName: LocationName): ILocation[] {
+    return Game.filterThings(placeName, this.data.allLocations)
   }
 
-  public filterPlaceNames(placeName: PlaceName): string[] {
+  public filterLocationNames(placeName: LocationName): string[] {
     return Game.filterThings(placeName, this.data.allPlayers).map(p => p.name)
   }
 
@@ -441,35 +264,35 @@ export class Game {
   //   }
   // }
 
-  private findPlace(card: ICard): CardPlace {
+  private findLocation(card: ICard): CardLocation {
     const cardName = card.name
 
     // Find can be slow because it searches through every place, but we usually
     // look for cards in groups, so check the last place we looked for a card.
     // We could put a place index on each card, but this needs to be maintained
     // and we can't stop users from arbitrarily changing it, so better to
-    // always search through all places
-    if (this.cacheFindPlaceName) {
-      const cacheFindPlace = this.data.allPlaces[this.cacheFindPlaceName]
-      const i = cacheFindPlace.cards.indexOf(cardName)
+    // always search through all locations
+    if (this.cacheFindLocationName) {
+      const cacheFindLocation = this.data.allLocations[this.cacheFindLocationName]
+      const i = cacheFindLocation.cards.indexOf(cardName)
       if (i !== -1) {
-        return [cacheFindPlace, i]
+        return [cacheFindLocation, i]
       }
     }
 
-    for (let name in this.data.allPlaces) {
-      const place = this.data.allPlaces[name]
+    for (let name in this.data.allLocations) {
+      const place = this.data.allLocations[name]
       const i = place.cards.indexOf(cardName)
       if (i !== -1) {
-        this.cacheFindPlaceName = place.name
+        this.cacheFindLocationName = place.name
         return [place, i]
       }
     }
     return [,-1]
   }
 
-  // NOTE assumes card has already been removed from all places
-  private insertCard(card: ICard, to: IPlace, index: number) {
+  // NOTE assumes card has already been removed from all locations
+  private insertCard(card: ICard, to: ILocation, index: number) {
     if (index === -1 || index >= to.cards.length) {
       to.cards.push(card.name)
     } else {
@@ -477,7 +300,7 @@ export class Game {
     }
   }
 
-  private removeCard(from: IPlace, index: number): ICard {
+  private removeCard(from: ILocation, index: number): ICard {
     if (from.cards.length === 0) {
       return
     }
@@ -504,33 +327,33 @@ export class Game {
     return this.playerChain.getLength()
   }
 
-  private addPlaceInternal(place: IPlace) {
-    console.assert(!this.data.allPlaces[place.name], `IPlace (${place.name}) already exists`)
-    this.data.allPlaces[place.name] = place
+  private addLocationInternal(place: ILocation) {
+    console.assert(!this.data.allLocations[place.name], `ILocation (${place.name}) already exists`)
+    this.data.allLocations[place.name] = place
     if (!Array.isArray(place.cards)) {
       place.cards = []
     }
   }
 
-  public addPlace(place: IPlace | IPlace[]): Game {
+  public addLocation(place: ILocation | ILocation[]): Game {
     // TODO assert that place.name is unique??
     if (Array.isArray(place)) {
       for (let p of place) {
-        this.addPlaceInternal(p)
+        this.addLocationInternal(p)
       }
     } else {
-      this.addPlaceInternal(place)
+      this.addLocationInternal(place)
     }
     return this
   }
 
-  private addCardInternal(card: ICard, to: IPlace, index: number) {
+  private addCardInternal(card: ICard, to: ILocation, index: number) {
     console.assert(!this.data.allCards[card.name], `ICard (${card.name}) already exists`)
     this.insertCard(card, to, index)
     this.data.allCards[card.name] = card
   }
 
-  public addCard(card: ICard | ICard[], to: IPlace, index: number = -1): Game {
+  public addCard(card: ICard | ICard[], to: ILocation, index: number = -1): Game {
     // TODO assert that card.name is unique??
     if (Array.isArray(card)) {
       for (let c of card) {
@@ -542,7 +365,7 @@ export class Game {
     return this
   }
 
-  // public addDice(dice: IDice | IDice[], to: IPlace, index: number = -1): Game {
+  // public addDice(dice: IDice | IDice[], to: ILocation, index: number = -1): Game {
   //   dice = Array.isArray(dice) ? dice : [dice]
   //
   //   for (let d of dice) {
@@ -557,9 +380,9 @@ export class Game {
   // index -1 represents the top, 0 is the bottom
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
-  public moveCards(cardName: CardName, toName: PlaceName, count: number = -1, toIndex: Index = -1): ICard[] {
+  public moveCards(cardName: CardName, toName: LocationName, count: number = -1, toIndex: Index = -1): ICard[] {
     const cards: ICard[] = this.filterCards(cardName)
-    const tos: IPlace[] = this.filterPlaces(toName)
+    const tos: ILocation[] = this.filterLocations(toName)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
     console.assert(cards.length > 0, `unable to find cards "${cardName}"`)
@@ -574,8 +397,8 @@ export class Game {
     // TODO what if there is a limit on the number of cards at the destination
     let iTo = 0, iToIndex = 0
     for (let card of cards) {
-      const [fromPlace, fromIndex] = this.findPlace(card)
-      const cardRemoved = this.removeCard(fromPlace, fromIndex)
+      const [fromLocation, fromIndex] = this.findLocation(card)
+      const cardRemoved = this.removeCard(fromLocation, fromIndex)
       console.assert(card === cardRemoved)
 
       this.insertCard(card, tos[iTo], toIndices[iToIndex])
@@ -592,9 +415,9 @@ export class Game {
 
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
-  public move(fromName: PlaceName, toName: PlaceName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): ICard[] {
-    const froms: IPlace[] = this.filterPlaces(fromName)
-    const tos: IPlace[] = this.filterPlaces(toName)
+  public move(fromName: LocationName, toName: LocationName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): ICard[] {
+    const froms: ILocation[] = this.filterLocations(fromName)
+    const tos: ILocation[] = this.filterLocations(toName)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
@@ -652,36 +475,36 @@ export class Game {
     return cardsMoved
   }
 
-  public shuffle(place: PlaceName): Game {
+  public shuffle(place: LocationName): Game {
     const placeNames = Array.isArray(place) ? place : [place]
 
     for (let name of placeNames) {
-      const places = this.filterPlaces(name) // should only have 0 or 1 entries
-      console.assert(places.length > 0, `unable to find place - ${name}`)
-      this.fisherYates(places[0].cards)
+      const locations = this.filterLocations(name) // should only have 0 or 1 entries
+      console.assert(locations.length > 0, `unable to find place - ${name}`)
+      this.fisherYates(locations[0].cards)
     }
     return this
   }
 
-  public reverse(place: PlaceName): Game {
+  public reverse(place: LocationName): Game {
     const placeNames = Array.isArray(place) ? place : [place]
 
     for (let name of placeNames) {
-      const places = this.filterPlaces(name) // should have 0 or 1 entries
-      if (places.length > 0) {
-        places[0].cards.reverse()
+      const locations = this.filterLocations(name) // should have 0 or 1 entries
+      if (locations.length > 0) {
+        locations[0].cards.reverse()
       }
     }
     return this
   }
 
-  public roll(place: PlaceName): Game {
+  public roll(place: LocationName): Game {
     const placeNames = Array.isArray(place) ? place : [place]
 
     for (let name of placeNames) {
-      const places = this.filterPlaces(name)
-      if (places.length > 0) {
-        for (let card of places[0].cards) {
+      const locations = this.filterLocations(name)
+      if (locations.length > 0) {
+        for (let card of locations[0].cards) {
           let dice = this.data.allCards[card] as IDice
           if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
             dice.value = dice.faces[this.randomInt(0, dice.faces.length)]
@@ -696,8 +519,8 @@ export class Game {
   public toString(): string {
     const allCards = Object.keys(this.data.allCards).map(key => this.data.allCards[key]) // Object.values(this.allCards)
     let str = `CARDS (${allCards.length}) = ${allCards.map(c => c.name).join(',')}\n`
-    for (let placeName in this.data.allPlaces) {
-      const place = this.data.allPlaces[placeName]
+    for (let placeName in this.data.allLocations) {
+      const place = this.data.allLocations[placeName]
       str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
         const card = this.getCardByName(c)
         return c + (card.value ? `[${card.value.toString()}]` : '')
@@ -715,8 +538,8 @@ export class Game {
     return {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
 
-  public pickPlaces(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return {id: this.uniqueId++, type: 'pickPlaces', who, options: locations, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
+  public pickLocations(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
+    return {id: this.uniqueId++, type: 'pickLocations', who, options: locations, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
   }
 
   public pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
@@ -1014,8 +837,8 @@ export class Game {
   public validateData() {
     for (let cardName in this.data.allCards) {
       let found = ''
-      for (let placeName in this.data.allPlaces) {
-        const place = this.data.allPlaces[placeName]
+      for (let placeName in this.data.allLocations) {
+        const place = this.data.allLocations[placeName]
         const i = place.cards.indexOf(cardName)
         if (i !== -1) {
           console.assert(found === '')
