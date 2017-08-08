@@ -35,8 +35,8 @@ function setup(g: Game) {
   g.registerCondition(validScoreCondition)
 
   let hand = { name: 'hand' }
-  g.addPlace(hand)
-  g.addPlace( {name: 'score'} )
+  g.addLocation(hand)
+  g.addLocation( {name: 'score'} )
 
   for (let i = 0; i < NUM_DICE; ++i) {
     g.addCard({ name: `dice${i}`, type: 'greedDie', value: GREED_DICE_FACES[0], faces: GREED_DICE_FACES }, hand)
