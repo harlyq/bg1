@@ -38,22 +38,22 @@ const BGCard = {
 const BGLocation = {
   view: (vnode) => {
     const command: IPickCommand = vnode.attrs.command
-    const placeName = vnode.attrs.name
-    const canPick = command && command.type === 'pickLocations' && command.options.indexOf(placeName) !== -1
-    const isPicked = selection.indexOf(placeName) !== -1
+    const locationName = vnode.attrs.name
+    const canPick = command && command.type === 'pickLocations' && command.options.indexOf(locationName) !== -1
+    const isPicked = selection.indexOf(locationName) !== -1
     let className = '.bg-place'
     let attrs = {}
     if (isPicked) {
       className = '.bg-place.picked'
-      attrs = {onclick: () => toggleSelection(placeName), tabindex: 1   }
+      attrs = {onclick: () => toggleSelection(locationName), tabindex: 1   }
     } else if (canPick) {
       className = '.bg-place.can-pick'
-      attrs = {onclick: () => toggleSelection(placeName), tabindex: 1}
+      attrs = {onclick: () => toggleSelection(locationName), tabindex: 1}
     }
 
     return (
       m(className, attrs,
-        m('div', placeName),
+        m('div', locationName),
         vnode.attrs.cards.slice().reverse().map((cardName, i) =>
           m(BGCard, {name: cardName, key: cardName, command: command})
         )
@@ -92,8 +92,8 @@ export const BGGame = {
       m('.bg-game',
         m(BGHistory, {gamesystem: gamesystem}),
         pickCallback ? m('button', {onclick: () => { pickCallback(selection); selection = [] }}, 'Commit') : m('div', 'AI playing'),
-        Object.keys(gamesystem.g.data.allLocations).map(placeName => {
-          const place = gamesystem.g.data.allLocations[placeName]
+        Object.keys(gamesystem.g.data.allLocations).map(locationName => {
+          const place = gamesystem.g.data.allLocations[locationName]
           return m(BGLocation, {name: place.name, cards: place.cards, command: command, key: place.name})
         }),
       )
@@ -187,7 +187,7 @@ function calcGridAttrs(params: LocationParams, r: number, c: number, cellWidth: 
 
 export const BGFan = {
   view: (vnode) => {
-    const placeName = vnode.attrs.name
+    const locationName = vnode.attrs.name
     const params = {x: 10, y: 10, w: 200, h: 100, locationStyle: LocationStyle.FAN, xAlign: LocationAlign.CENTER, yAlign: LocationAlign.FROM_END}
     const cardWidth = 40
     const cardHeight = 50

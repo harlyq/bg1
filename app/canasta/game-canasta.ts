@@ -34,19 +34,19 @@ function getNumTeams(g: Game) {
 
 function setup(g: Game) {
   let draw = {name: 'draw'}
-  g.addPlace(draw)
-  g.addPlace({name: 'discard'})
+  g.addLocation(draw)
+  g.addLocation({name: 'discard'})
 
   for (let player of g.filterPlayerNames(p => true)) {
-    g.addPlace({name: `${player}_hand`})
+    g.addLocation({name: `${player}_hand`})
   }
 
   const numTeams = getNumTeams(g)
   for (let i = 1; i <= numTeams; ++i) {
     for (let rank of RANKS) {
-      g.addPlace({name: `team${i}_meld_${rank}`})
+      g.addLocation({name: `team${i}_meld_${rank}`})
     }
-    g.addPlace({name: `team${i}_redThrees`})
+    g.addLocation({name: `team${i}_redThrees`})
   }
 
   for (let deck of [1,2]) {

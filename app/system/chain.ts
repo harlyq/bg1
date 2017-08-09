@@ -5,7 +5,7 @@ class Item {
   valid: boolean = true
 }
 
-export default class Chain {
+export class Chain {
   items: Item[]
 
   // TODO support looping and ending

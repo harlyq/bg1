@@ -11,7 +11,7 @@ Tape.test('test graph sectors', (test) => {
   g.addSector({name: 'D', sectors: ['A']})
   g.validateGraph()
 
-  test.equal(Object.keys(g.sectors).length, 4, "4 sectors")
+  test.equal(g.getSectors().length, 4, "4 sectors")
   test.deepEqual(g.getAdjacentSectors('A'), ['B','D'], "A links to B and D")
   test.deepEqual(g.getAdjacentSectors('C'), [], "C is linked to nothing")
   test.deepEqual(g.getAdjacentSectors('B'), ['A', 'C'], "B links to A and C")
@@ -31,8 +31,8 @@ Tape.test('test graph edges', (test) => {
   g.addEdge({name: 'bc', sectors: ['B', 'C']})
   g.validateGraph()
 
-  test.equal(Object.keys(g.sectors).length, 4, "4 sectors")
-  test.equal(Object.keys(g.edges).length, 3, "3 edges")
+  test.equal(g.getSectors().length, 4, "4 sectors")
+  test.equal(g.getEdges().length, 3, "3 edges")
   test.deepEqual(g.getSectorEdges('A'), ['ab', 'ad'], "A has edges ab and ad")
   test.deepEqual(g.getSectorEdges('B'), ['ab', 'bc'], "B has edges ab and bc")
   test.deepEqual(g.getEdgeSectors('ab'), ['A', 'B'], "edge ab links sectors A and B") // do we care about the order?
@@ -49,8 +49,8 @@ Tape.test('test graph resolveEdges', (test) => {
   g.resolveSectors()
   g.validateGraph()
 
-  test.equal(Object.keys(g.sectors).length, 4, "4 sectors")
-  test.equal(Object.keys(g.edges).length, 3, "3 edges")
+  test.equal(g.getSectors().length, 4, "4 sectors")
+  test.equal(g.getEdges().length, 3, "3 edges")
   test.deepEqual(g.getSectorEdges('A'), ['ab', 'ad'], "A has edges ab and ad")
   test.deepEqual(g.getSectorEdges('B'), ['ab', 'bc'], "B has edges ab and bc")
   test.deepEqual(g.getSectorEdges('C'), ['bc'], "C has edge bc")

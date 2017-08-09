@@ -1,5 +1,5 @@
 import * as Tape from 'tape'
-import Chain from '../chain'
+import {Chain} from '../chain'
 
 Tape('test length', t => {
   let chain1 = new Chain()

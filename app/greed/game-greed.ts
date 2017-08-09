@@ -1,6 +1,6 @@
 import {Game} from '../system/game'
 import {GameSystem} from '../system/gamesystem'
-import Chain from '../system/chain'
+import {Chain} from '../system/chain'
 import Util from '../system/util'
 
 // for rendering need a shape for a die, with sides in a particular format

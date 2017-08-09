@@ -1,5 +1,5 @@
 import Util from './util'
-import Chain from './chain'
+import {Chain} from './chain'
 // import * as ReadlineSync from 'readline-sync'
 //import * as MersenneTwister from 'mersenne-twister' // HACK not a module
 import * as seedrandom from 'seedrandom'
@@ -200,16 +200,16 @@ export class Game {
     return this.data.allCards[cardName]
   }
 
-  public getLocationByName(placeName: string): ILocation {
-    return this.data.allLocations[placeName]
+  public getLocationByName(locationName: string): ILocation {
+    return this.data.allLocations[locationName]
   }
 
   public getPlayerByName(playerName: string): IPlayer {
     return this.data.allPlayers[playerName]
   }
 
-  public getCards(placeName: LocationName): ICard[] {
-    const locations: ILocation[] = Game.filterThings(placeName, this.data.allLocations)
+  public getCards(locationName: LocationName): ICard[] {
+    const locations: ILocation[] = Game.filterThings(locationName, this.data.allLocations)
     let cards: ICard[] = []
     for (let place of locations) {
       for (let cardName of place.cards) {
@@ -219,12 +219,12 @@ export class Game {
     return cards
   }
 
-  public getCardNames(placeName: LocationName): string[] {
-    return this.getCards(placeName).map(x => x.name)
+  public getCardNames(locationName: LocationName): string[] {
+    return this.getCards(locationName).map(x => x.name)
   }
 
-  public getCardCount(placeName: LocationName): number {
-    const locations: ILocation[] = Game.filterThings(placeName, this.data.allLocations)
+  public getCardCount(locationName: LocationName): number {
+    const locations: ILocation[] = Game.filterThings(locationName, this.data.allLocations)
     let length = 0
     for (let place of locations) {
       length += place.cards.length
@@ -232,12 +232,12 @@ export class Game {
     return length
   }
 
-  public filterLocations(placeName: LocationName): ILocation[] {
-    return Game.filterThings(placeName, this.data.allLocations)
+  public filterLocations(locationName: LocationName): ILocation[] {
+    return Game.filterThings(locationName, this.data.allLocations)
   }
 
-  public filterLocationNames(placeName: LocationName): string[] {
-    return Game.filterThings(placeName, this.data.allPlayers).map(p => p.name)
+  public filterLocationNames(locationName: LocationName): string[] {
+    return Game.filterThings(locationName, this.data.allPlayers).map(p => p.name)
   }
 
   public filterPlayers(playerName: PlayerName): IPlayer[] {
@@ -476,9 +476,9 @@ export class Game {
   }
 
   public shuffle(place: LocationName): Game {
-    const placeNames = Array.isArray(place) ? place : [place]
+    const locationNames = Array.isArray(place) ? place : [place]
 
-    for (let name of placeNames) {
+    for (let name of locationNames) {
       const locations = this.filterLocations(name) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `unable to find place - ${name}`)
       this.fisherYates(locations[0].cards)
@@ -487,9 +487,9 @@ export class Game {
   }
 
   public reverse(place: LocationName): Game {
-    const placeNames = Array.isArray(place) ? place : [place]
+    const locationNames = Array.isArray(place) ? place : [place]
 
-    for (let name of placeNames) {
+    for (let name of locationNames) {
       const locations = this.filterLocations(name) // should have 0 or 1 entries
       if (locations.length > 0) {
         locations[0].cards.reverse()
@@ -499,9 +499,9 @@ export class Game {
   }
 
   public roll(place: LocationName): Game {
-    const placeNames = Array.isArray(place) ? place : [place]
+    const locationNames = Array.isArray(place) ? place : [place]
 
-    for (let name of placeNames) {
+    for (let name of locationNames) {
       const locations = this.filterLocations(name)
       if (locations.length > 0) {
         for (let card of locations[0].cards) {
@@ -519,8 +519,8 @@ export class Game {
   public toString(): string {
     const allCards = Object.keys(this.data.allCards).map(key => this.data.allCards[key]) // Object.values(this.allCards)
     let str = `CARDS (${allCards.length}) = ${allCards.map(c => c.name).join(',')}\n`
-    for (let placeName in this.data.allLocations) {
-      const place = this.data.allLocations[placeName]
+    for (let locationName in this.data.allLocations) {
+      const place = this.data.allLocations[locationName]
       str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
         const card = this.getCardByName(c)
         return c + (card.value ? `[${card.value.toString()}]` : '')
@@ -837,12 +837,12 @@ export class Game {
   public validateData() {
     for (let cardName in this.data.allCards) {
       let found = ''
-      for (let placeName in this.data.allLocations) {
-        const place = this.data.allLocations[placeName]
+      for (let locationName in this.data.allLocations) {
+        const place = this.data.allLocations[locationName]
         const i = place.cards.indexOf(cardName)
         if (i !== -1) {
           console.assert(found === '')
-          found = placeName
+          found = locationName
         }
       }
     }

@@ -41,6 +41,7 @@ export class GameSystem {
     this.itr = rules()
     this.itr.next()
     this.result = this.itr.next(this.g)
+    console.assert(this.result.value && this.result.value.type, 'rules did not return a query, are you missing a "*" on a yield?')
     // this.historyFile = `history${seed}.json`
     this.historyIndex = 0
   }
@@ -150,7 +151,12 @@ export class GameSystem {
       }
 
       this.validateChoice(command, choice)
-      this.result = this.itr.next(choice)
+      try {
+        this.result = this.itr.next(choice)
+        console.assert(this.result.value && this.result.value.type, 'rules did not return a query, are you missing a "*" on a yield?')
+      } catch (e) {
+        console.error(e)
+      }
     } else {
       this.playback = Playback.PAUSE
     }
