@@ -9,6 +9,7 @@ module.exports = {
   entry: {
     'game-canasta': `${PATHS.dist}/canasta/game-canasta.js`,
     'game-mancala': `${PATHS.dist}/mancala/game-mancala.js`,
+    'game-sword-and-sail': `${PATHS.dist}/sword-and-sail/game-sword-and-sail.js`,
     'test-ui': `${PATHS.dist}/ui/test/test-ui.js`,
   },
   output: {

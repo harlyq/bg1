@@ -3,63 +3,97 @@ import {Game, IGameOptions, IPickCommand} from './game'
 enum Playback {
   PLAY,
   PAUSE,
-  RECORD
+  RECORD,
+  SEEK,
 }
+
+type SetupFn = (...args: any[]) => void
 
 export class GameSystem {
   playback: Playback = Playback.PAUSE
   oldPlayback: Playback = Playback.PAUSE
   g: Game
-  itr: any
-  result: any
   writeHistoryFile: boolean = false
   historyFile: string = ''
   history: any[] = []
   historyIndex: number // curent seek position, or history.length if at the end
+  seekIndex: number
   setup: any
   rules: any
   scoreFn: (g: Game, playerName: string) => number
   seed: any
   options: IGameOptions = {}
   playerClients: any = {}
+  pendingCommands = []
+  render: any
+  resolveSeek: any
 
-  constructor(setup, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), history: any[] = []) {
+  constructor(setup: SetupFn, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), history: any[] = []) {
     this.setup = setup
     this.rules = rules
     this.scoreFn = scoreFn
     this.seed = seed
     this.options = {...options}
     this.playerClients = {...playerClients}
-    this.initGame(setup, rules, scoreFn, playerClients, options, seed)
+//    this.initGame(setup, rules, scoreFn, playerClients, options, seed)
     this.history = history
     this.playback = Playback.RECORD
+    this.historyIndex = 0
+    this.seekIndex = 0
   }
 
-  private initGame(setup, rules, scoreFn, playerClients, options, seed) {
-    this.g = new Game(setup, rules, Object.keys(playerClients), options, seed)
+  public async run(render) {
+    let restartGame = true
+    this.render = render
+
+    while (restartGame) {
+      this.initGame(this.setup, this.rules, this.scoreFn, this.playerClients, this.options, this.seed)
+      this.g.render = this.onGameUpdated.bind(this)
+      restartGame = false
+
+      let seekPromise = new Promise(resolve => { this.resolveSeek = resolve })
+      let rulesPromise = this.rules(this.g)
+
+      let response = await Promise.race([rulesPromise, seekPromise])
+      if (response === 'seek') {
+        restartGame = true
+      }
+
+      this.pendingCommands = []
+    }
+  }
+
+  private onGameUpdated() {
+    if (this.playback !== Playback.SEEK && this.render) {
+      this.render()
+    }
+  }
+
+  private initGame(setup: SetupFn, rules, scoreFn, playerClients, options, seed) {
+    this.g = new Game(this.asyncUpdate.bind(this), setup, rules, Object.keys(playerClients), options, seed)
     this.scoreFn = scoreFn
-    this.itr = rules()
-    this.itr.next()
-    this.result = this.itr.next(this.g)
-    console.assert(this.result.value && this.result.value.type, 'rules did not return a query, are you missing a "*" on a yield?')
     // this.historyFile = `history${seed}.json`
     this.historyIndex = 0
   }
 
   public seek(replayTo: number) {
-    // restart the game, and seek to the desired position
-    // always need to start from the beginning for the iterator to work correctly
-    if (!this.historyIndex || replayTo < this.historyIndex) {
-      this.initGame(this.setup, this.rules, this.scoreFn, this.playerClients, this.options, this.seed)
+    this.seekIndex = Math.min(replayTo, this.history.length)
+    if (this.historyIndex === this.seekIndex) {
+      return // at the correct point, nothing to do
     }
 
-    this.playback = Playback.PLAY
-    replayTo = Math.min(replayTo, this.history.length)
-    while (!this.result.done && this.historyIndex < replayTo) {
-      this.update()
-    }
+    this.playback = Playback.SEEK
 
-    this.pause()
+    if (this.pendingCommands.length === 0) {
+      this.run(this.render) // game finished, re-run to perform seek
+    } else if (!this.historyIndex || this.seekIndex < this.historyIndex) {
+      this.resolveSeek('seek')
+    } else {
+      // going forward in time, process the pending commands to continue running
+      while (this.pendingCommands.length > 0) {
+        this.pendingCommands.shift()()
+      }
+    }
   }
 
   public togglePause() {
@@ -127,39 +161,48 @@ export class GameSystem {
     }
   }
 
-  public async update() {
-    if (this.playback === Playback.PAUSE) {
-      return
-    } else if (this.playback === Playback.PLAY && this.historyIndex >= this.history.length) {
-      return
-    }
+  private asyncUpdate(pickCommand: IPickCommand): Promise<string[]> {
+    return new Promise<string[]>((resolve, reject) => {
+      this.pendingCommands.push(() => this.asyncTick(pickCommand).then((val) => resolve(val)))
 
-    if (!this.result.done) {
-      const command: IPickCommand = this.result.value
-
-      let choice
-      if (this.historyIndex < this.history.length) {
-        choice = this.history[this.historyIndex++]
-      } else {
-        choice = await this.playerClients[command.who](this.g, command, this.scoreFn)
-        this.history.push(choice)
-        this.historyIndex = this.history.length
-
-        if (this.historyFile) {
-          // fs.writeFileSync(this.historyFile, JSON.stringify(this.history))
+      if (this.playback === Playback.PAUSE) {
+        return
+      } else if (this.playback === Playback.PLAY && this.historyIndex >= this.history.length) {
+        return
+      } if (this.playback === Playback.SEEK && this.historyIndex >= this.seekIndex) {
+        // TODO fix history index for parallel requests, these should be treated as
+        // a single history
+        if (this.render) {
+          this.render()
         }
+        this.playback = Playback.PAUSE
+        return
       }
 
-      this.validateChoice(command, choice)
-      try {
-        this.result = this.itr.next(choice)
-        console.assert(this.result.value && this.result.value.type, 'rules did not return a query, are you missing a "*" on a yield?')
-      } catch (e) {
-        console.error(e)
+      while (this.pendingCommands.length > 0) {
+        this.pendingCommands.shift()()
       }
+    })
+  }
+
+  private async asyncTick(pickCommand: IPickCommand) {
+    let choice
+    if (this.historyIndex < this.history.length) {
+      choice = this.history[this.historyIndex++]
     } else {
-      this.playback = Playback.PAUSE
+      // TODO support async client functions
+      choice = await (this.playerClients[pickCommand.who](this.g, pickCommand, this.scoreFn))
+      this.history.push(choice)
+      this.historyIndex = this.history.length
+
+      if (this.historyFile) {
+        // fs.writeFileSync(this.historyFile, JSON.stringify(this.history))
+      }
     }
+
+    this.validateChoice(pickCommand, choice)
+
+    return choice
   }
 
   private validateChoice(command: IPickCommand, result: any[]) {

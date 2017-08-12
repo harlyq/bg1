@@ -85,8 +85,12 @@ export class Game {
   seed: number
   private random: seedrandom
   cacheFindLocationName: string
+  pickFn: (command: IPickCommand) => Promise<string[]>
+  render: any
+  [others: string]: any
 
-  constructor(setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+  constructor(pickFn: (command: IPickCommand) => Promise<string[]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+    this.pickFn = pickFn
     this.setupFn = setupFn
     this.rules = rules
     this.seed = seed
@@ -105,6 +109,10 @@ export class Game {
 
     if (setupFn) {
       setupFn(this)
+    }
+
+    if (this.render) {
+      this.render()
     }
   }
 
@@ -237,7 +245,7 @@ export class Game {
   }
 
   public filterLocationNames(locationName: LocationName): string[] {
-    return Game.filterThings(locationName, this.data.allPlayers).map(p => p.name)
+    return Game.filterThings(locationName, this.data.allLocations).map(p => p.name)
   }
 
   public filterPlayers(playerName: PlayerName): IPlayer[] {
@@ -410,6 +418,10 @@ export class Game {
       }
     }
 
+    if (this.render) {
+      this.render()
+    }
+
     return cards
   }
 
@@ -472,6 +484,10 @@ export class Game {
       }
     } while (count > 0)
 
+    if (this.render) {
+      this.render()
+    }
+
     return cardsMoved
   }
 
@@ -529,21 +545,35 @@ export class Game {
     return str
   }
 
+  public getCardPlacements(): string {
+    let str = ''
+    for (let locationName in this.data.allLocations) {
+      const place = this.data.allLocations[locationName]
+      if (place.cards.length > 0) {
+        str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
+          const card = this.getCardByName(c)
+          return c + (card.value ? `[${card.value.toString()}]` : '')
+        }).join(',')}\n`
+      }
+    }
+    return str
+  }
+
   // TODO provide an enum for the type
   public pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return {id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
+    return this.pickFn({id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
   }
 
   public pickCards(who: string, cards: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return {id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
+    return this.pickFn({id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
   }
 
   public pickLocations(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return {id: this.uniqueId++, type: 'pickLocations', who, options: locations, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
+    return this.pickFn({id: this.uniqueId++, type: 'pickLocations', who, options: locations, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
   }
 
   public pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return {id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
+    return this.pickFn({id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
   }
 
   // // could we just use pick instead?
@@ -660,7 +690,7 @@ export class Game {
   // TODO separate this random from the games random (maybe have a random in game)
   public static randomClient() {
 
-    return async function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number) {
+    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number) {
       let combinations = Game.getValidCombinations(g, command)
       if (combinations.length === 0) {
         return [] // no options, exit
@@ -668,6 +698,51 @@ export class Game {
         const j = Util.randomInt(0, combinations.length)
         return combinations[j]
       }
+    }
+  }
+
+  // If there are multiple commands sent in the same frame, then process them
+  // as parallel commands
+  // TODO ensure we return one command pre owner
+  public static testClient() {
+    let parallelCommands = []
+    let processedCommands = []
+    let chosenCommand
+
+    return async function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number) {
+      parallelCommands.push(command)
+
+      return new Promise((resolve) => {
+
+        // this timeout will run once all the parallel commands have been
+        // received for this frame
+        setTimeout(() => {
+          if (!chosenCommand) {
+            const i = Util.randomInt(0, parallelCommands.length)
+            chosenCommand = parallelCommands[i]
+            processedCommands = []
+          }
+
+          let choice = [] // TODO should we differentiate between the chose nothing option, and an unchosen parallel?
+          if (command === chosenCommand) {
+            let combinations = Game.getValidCombinations(g, command)
+            if (combinations.length > 0) {
+              const j = Util.randomInt(0, combinations.length)
+              choice = combinations[j]
+            }
+          }
+
+          // if we've processed all commands, then reset the parallelCommands list
+          processedCommands.push(command)
+          if (processedCommands.length === parallelCommands.length) {
+            chosenCommand = undefined
+            parallelCommands = []
+            processedCommands = []
+          }
+
+          resolve(choice)
+        }, 0)
+      })
     }
   }
 
@@ -767,7 +842,8 @@ export class Game {
     // TODO should place and card be internal constructs of the game, and all
     // custom data must be managed through allValues?
     // TODO ugly
-    let trial = new Game(g.setupFn, g.rules, g.playerChain.toArray(), {}, g.seed) // TODO to save space, should we share the cards?
+    // TODO replace pickFn with our trial function
+    let trial = new Game(g.pickFn, g.setupFn, g.rules, g.playerChain.toArray(), {}, g.seed) // TODO to save space, should we share the cards?
 
     let trialItr = g.rules()
     let trialResult = trialItr.next()
