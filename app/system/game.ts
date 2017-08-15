@@ -28,9 +28,9 @@ export interface ILocation {
 
 type CardLocation = [ILocation, number]
 
-type PickCount = number | number[]
+export type PickCount = number | number[]
 
-type PickCondition = (g: Game, player: string, list: string[], conditionArg?: any) => boolean
+export type PickCondition = (g: Game, player: string, list: string[], conditionArg?: any) => boolean
 
 export interface IPickCommand {
   id: number // starts from 0
@@ -76,7 +76,7 @@ export class Game {
   }
 
   registeredConditions: PickCondition[] = []
-  history: any[] = []
+  history: string[][][] = []
   uniqueId: number = 0
   options: {debug: boolean} = {debug: false}
   setupFn: (Game) => void
@@ -85,11 +85,16 @@ export class Game {
   seed: number
   private random: seedrandom
   cacheFindLocationName: string
-  pickFn: (command: IPickCommand) => Promise<string[]>
+  pickFn: (commands: IPickCommand[]) => Promise<string[][]>
   render: any
-  [others: string]: any
+  pickCommands: IPickCommand[] = []
+  pickChoices: {choicePromise: Promise<string[][]>, pendingCommands: IPickCommand[]}[] = []
+  // pickCommandsCopy: {command: IPickCommand, choice: string[]}[] = []
+  // resolvedCommands: IPickCommand[] = []
+  choices: string[][] = []
+  isRunning: boolean = false
 
-  constructor(pickFn: (command: IPickCommand) => Promise<string[]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+  constructor(pickFn: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
     this.pickFn = pickFn
     this.setupFn = setupFn
     this.rules = rules
@@ -150,7 +155,7 @@ export class Game {
     return list
   }
 
-  public getHistory(): any[] {
+  public getHistory(): string[][][] {
     return this.history
   }
 
@@ -559,21 +564,77 @@ export class Game {
     return str
   }
 
+  private async pickInternal(type: string, who: string, options: string[], count: PickCount, condition?: PickCondition, conditionArg?: any): Promise<string[]> {
+    console.assert(typeof who !== 'undefined' && who !== '')
+    console.assert(Array.isArray(options))
+
+    const command = {id: this.uniqueId++, type, who, options, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
+    this.pickCommands.push(command)
+
+    // TODO clean this up, it is very confusing
+    return new Promise<string[]>((resolve) => {
+
+      // we may receive several pick requests in the same frame, these are
+      // pushed onto 'pickCommands', the setTimeout is used to process the
+      // commands once all of them have been received
+      setTimeout(async () => {
+        console.assert(this.pickCommands.length > 0)
+
+        const i = this.pickCommands.indexOf(command)
+        console.assert(i !== -1)
+
+        const buildChoicePromise = typeof this.pickChoices[i] === 'undefined'
+        if (buildChoicePromise) {
+          // get all commands that don't have a choice assigned, and process them
+          // in one batch
+          const pendingCommands = this.pickCommands.filter((c, j) => typeof this.pickChoices[j] === 'undefined')
+          const choicePromise = this.pickFn(pendingCommands)
+          this.pickCommands.forEach((c, j) => {
+            if (typeof this.pickChoices[j] === 'undefined') {
+              this.pickChoices[j] = {choicePromise, pendingCommands}
+            }
+          })
+        }
+        const myPickChoice = this.pickChoices[i]
+
+        // everyone will wait on their promise (which may be shared amongst multipe commands)
+        const choices: string[][] = await myPickChoice.choicePromise
+
+        if (buildChoicePromise) {
+          this.history.push(choices)
+          console.assert(choices.length === myPickChoice.pendingCommands.length)
+        }
+
+        // extra the choice for this command
+        const j = myPickChoice.pendingCommands.indexOf(command)
+        const choice = choices[j]
+
+        // remove the command and associate choice from the lists, they've now been processed
+        // we recalculate the index, in case other async queries have removed entries
+        const myI = this.pickChoices.indexOf(myPickChoice)
+        this.pickChoices.splice(myI, 1)
+        this.pickCommands.splice(myI, 1)
+
+        resolve(choice)
+      }, 0)
+    })
+  }
+
   // TODO provide an enum for the type
-  public pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return this.pickFn({id: this.uniqueId++, type: 'pick', who, options: options, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
+  public async pick(who: string, options: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any): Promise<string[]> {
+    return await this.pickInternal('pick', who, options, count, condition, conditionArg)
   }
 
-  public pickCards(who: string, cards: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return this.pickFn({id: this.uniqueId++, type: 'pickCards', who, options: cards, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
+  public async pickCards(who: string, cards: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any): Promise<string[]> {
+    return await this.pickInternal('pickCards', who, cards, count, condition, conditionArg)
   }
 
-  public pickLocations(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return this.pickFn({id: this.uniqueId++, type: 'pickLocations', who, options: locations, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
+  public async pickLocations(who: string, locations: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any): Promise<string[]> {
+    return await this.pickInternal('pickLocations', who, locations, count, condition, conditionArg)
   }
 
-  public pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any) {
-    return this.pickFn({id: this.uniqueId++, type: 'pickPlayers', who, options: players, count, condition: this.registeredConditions.indexOf(condition), conditionArg})
+  public async pickPlayers(who: string, players: string[], count: PickCount = 1, condition?: PickCondition, conditionArg?: any): Promise<string[]> {
+    return await this.pickInternal('pickPlayers', who, players, count, condition, conditionArg)
   }
 
   // // could we just use pick instead?
@@ -685,65 +746,6 @@ export class Game {
     let combinations = Util.getCombinations(command.options, count[0], count[1], conditionFn)
 
     return combinations
-  }
-
-  // TODO separate this random from the games random (maybe have a random in game)
-  public static randomClient() {
-
-    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number) {
-      let combinations = Game.getValidCombinations(g, command)
-      if (combinations.length === 0) {
-        return [] // no options, exit
-      } else {
-        const j = Util.randomInt(0, combinations.length)
-        return combinations[j]
-      }
-    }
-  }
-
-  // If there are multiple commands sent in the same frame, then process them
-  // as parallel commands
-  // TODO ensure we return one command pre owner
-  public static testClient() {
-    let parallelCommands = []
-    let processedCommands = []
-    let chosenCommand
-
-    return async function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number) {
-      parallelCommands.push(command)
-
-      return new Promise((resolve) => {
-
-        // this timeout will run once all the parallel commands have been
-        // received for this frame
-        setTimeout(() => {
-          if (!chosenCommand) {
-            const i = Util.randomInt(0, parallelCommands.length)
-            chosenCommand = parallelCommands[i]
-            processedCommands = []
-          }
-
-          let choice = [] // TODO should we differentiate between the chose nothing option, and an unchosen parallel?
-          if (command === chosenCommand) {
-            let combinations = Game.getValidCombinations(g, command)
-            if (combinations.length > 0) {
-              const j = Util.randomInt(0, combinations.length)
-              choice = combinations[j]
-            }
-          }
-
-          // if we've processed all commands, then reset the parallelCommands list
-          processedCommands.push(command)
-          if (processedCommands.length === parallelCommands.length) {
-            chosenCommand = undefined
-            parallelCommands = []
-            processedCommands = []
-          }
-
-          resolve(choice)
-        }, 0)
-      })
-    }
   }
 
   // public static bruteForceClient(depth: number): any {

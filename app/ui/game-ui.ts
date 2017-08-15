@@ -73,10 +73,10 @@ export const BGHistory = {
         m('input.bg-history-slider', {
           type: 'range',
           min: 0,
-          max: gamesystem.history.length,
-          value: gamesystem.historyIndex,
+          max: gamesystem.replay.length,
+          value: gamesystem.replayIndex,
           onchange: (e) => gamesystem.seek(parseInt(e.target.value)),
-          oninput: (e) => gamesystem.seek(parseInt(e.target.value))
+          //oninput: (e) => gamesystem.seek(parseInt(e.target.value))
         })
       )
     )

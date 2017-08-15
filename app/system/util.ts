@@ -85,7 +85,7 @@ export default class Util {
   }
 
   // returns a map by keyFn of the list of instances with a matching keyFn
-  public static makeBuckets<T>(list: T[], keyFn: (T) => string): {[key: string]: T} {
+  public static makeBuckets<T>(list: T[], keyFn: (T) => string): {[key: string]: T[]} {
     let buckets = list.reduce((buckets, x) => {
       const key = keyFn(x)
       if (typeof buckets[key] === 'undefined') {
@@ -259,5 +259,19 @@ export default class Util {
       }
       return dest
     }
+  }
+
+  // takes items in lists of lists and places them into a list
+  // only flattens the first level
+  public static flatten(list: any[][]): any[] {
+    let result = []
+    for (let item in list) {
+      if (Array.isArray(item)) {
+        result.concat(item)
+      } else {
+        result.push(item)
+      }
+    }
+    return result
   }
 }
