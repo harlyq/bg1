@@ -37,14 +37,12 @@ function setup(g: Game) {
   //console.log(g.toString())
 }
 
-function* rules() {
-  let g = yield // get the reference to the Game structure
-
+async function rules(g: Game) {
   let player: string = 'a'
   let winResult
 
   while (!winResult) {
-    player = yield* turn(g, player) // TODO is there a way for typescript to enforce yield*
+    player = await turn(g, player) // TODO is there a way for typescript to enforce yield*
     winResult = findWinner(g)
   }
 
@@ -55,9 +53,9 @@ function* rules() {
   }
 }
 
-function* turn(g: Game, player: string) {
+async function turn(g: Game, player: string): Promise<string> {
   const validLocations = g.filterLocations(p => p.cards.length > 0 && playerPits[player].indexOf(p.name) >= 0).map(p => p.name)
-  const result: string[] = yield g.pickLocations(player, validLocations)
+  const result: string[] = await g.pickLocations(player, validLocations)
 
   if (g.options.debug) {
     console.log(`*** ${player} plays ${result[0]} ***`)
@@ -150,32 +148,46 @@ function findWinner(g: Game): string {
   }
 }
 
-// TODO move the play logic some
-const playerClients = {
-  'a': Game.randomClient(), //Game.monteCarloClient(5, 100),
-  'b': uiClient, //Game.randomClient(), //Game.monteCarloClient(10, 1000), // Game.consoleClient(),
+let playerClients = {
+  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(1, 1), // Game.consoleClient(),
+  'b': GameSystem.randomClient() // Game.consoleClient()
 }
-// Game.play(setup, rules, getScore, playerClient)
-
-// Util.quitOnCtrlBreak()
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
-let pickCommand
-let pickCallback
 const content = document.getElementById('content')
 
-function update() {
-   gs.update()
-   m.render(content, m(BGGame, {gamesystem: gs, command: pickCommand, callback: pickCallback}))
-   requestAnimationFrame(update) // TODO we only need to do this when something changes
+function render() {
+  m.render(content, m(BGGame, {gamesystem: gs}))
 }
-update()
 
-// TODO wip
-async function uiClient(g: Game, command: IPickCommand, scoreFn: (g: Game, options: string[]) => boolean) {
-  pickCommand = command
-  return new Promise(resolve => {
-    pickCallback = resolve
-  })
-  //requestAnimationFrame(update)
-}
+gs.run(() => requestAnimationFrame(render))
+
+// // TODO move the play logic some
+// const playerClients = {
+//   'a': Game.randomClient(), //Game.monteCarloClient(5, 100),
+//   'b': uiClient, //Game.randomClient(), //Game.monteCarloClient(10, 1000), // Game.consoleClient(),
+// }
+// // Game.play(setup, rules, getScore, playerClient)
+//
+// // Util.quitOnCtrlBreak()
+//
+// let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
+// let pickCommand
+// let pickCallback
+// const content = document.getElementById('content')
+//
+// function update() {
+//    gs.update()
+//    m.render(content, m(BGGame, {gamesystem: gs, command: pickCommand, callback: pickCallback}))
+//    requestAnimationFrame(update) // TODO we only need to do this when something changes
+// }
+// update()
+//
+// // TODO wip
+// async function uiClient(g: Game, command: IPickCommand, scoreFn: (g: Game, options: string[]) => boolean) {
+//   pickCommand = command
+//   return new Promise(resolve => {
+//     pickCallback = resolve
+//   })
+//   //requestAnimationFrame(update)
+// }

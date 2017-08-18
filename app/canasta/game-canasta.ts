@@ -72,16 +72,15 @@ function getTeam(g: Game, player: string): string {
   return team.toString()
 }
 
-function* rules() {
-  let g = yield
+async function rules(g: Game) {
   let player = g.playerChain.first()
 
-  yield* deal(g)
+  deal(g)
 
   let gameOver = false
   while (!gameOver) {
     g.debugLog(`Player ${player}'s turn`)
-    gameOver = yield* turn(g, player)
+    gameOver = await turn(g, player)
     if (!gameOver) {
       player = g.playerChain.next(player)
     }
@@ -155,7 +154,7 @@ function hasAllRedThrees(cards: string[]): boolean {
   return Util.arrayIntersection(cards, ['3H1','3H2','3D1','3D2']).length === 4
 }
 
-function* deal(g: Game) {
+function deal(g: Game) {
   g.shuffle('draw')
 
   for (let player of g.getAllPlayerNames()) {
@@ -181,18 +180,18 @@ function* deal(g: Game) {
   }
 }
 
-function* turn(g:Game, player: string) {
+async function turn(g:Game, player: string) {
   const team = getTeam(g, player)
 
   // TODO add option to ask about going out
-  let gameOver = yield* draw(g, player, team)
-  gameOver = gameOver || (yield* meld(g, player, team, {}))
-  gameOver = gameOver || (yield* discard(g, player, team))
+  let gameOver = await draw(g, player, team)
+  gameOver = gameOver || (await meld(g, player, team, {}))
+  gameOver = gameOver || (await discard(g, player, team))
 
   return gameOver
 }
 
-function* draw(g: Game, player: string, team: string) {
+async function draw(g: Game, player: string, team: string) {
   const discards = g.getCardNames('discard')
   console.assert(discards.length > 0)
 
@@ -228,7 +227,7 @@ function* draw(g: Game, player: string, team: string) {
     g.debugLog(`Player ${player} choose draw cards or take the pack`)
   }
 
-  let actions = yield g.pick(player, possibleActions)
+  let actions = await g.pick(player, possibleActions)
   if (actions.length > 0 && actions[0] === TAKE_PACK) {
     g.debugLog(`${player} takes the top discard "${topDiscard}"`)
     const snapshot = g.takeSnapshot()
@@ -239,7 +238,7 @@ function* draw(g: Game, player: string, team: string) {
 
     if (g.getCardCount(discardMeldPlace) < MIN_MELD_SIZE) {
       const oldMeldScore = getMeldScore(g, player)
-      const playerHandEmpty = yield* meld(g, player, team, {rank: topDiscardRank, twoNaturals: wasPackFrozen})
+      const playerHandEmpty = await meld(g, player, team, {rank: topDiscardRank, twoNaturals: wasPackFrozen})
       const newMeldScore = getMeldScore(g, player)
 
       // if we cancelled the meld then rollback taking the card
@@ -365,7 +364,7 @@ function meldCondition(g: Game, player: string, cards: string[], options: MeldOp
   return meldPlaces.length > 0
 }
 
-function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOptions) {
+async function meld(g: Game, player: string, team: string, initialMeldOptions: MeldOptions) {
   let cards = []
   let meldOptions: MeldOptions = Util.copyJSON(initialMeldOptions)
   let meldCount = 0
@@ -380,7 +379,7 @@ function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOp
 
     // TODO this can take a very long time when we have a large number of combinations
     g.debugLog(`Player ${player} choose cards to meld (${Util.combination(n,0,maxPickCount)} combinations):`) // TODO how do we localize this?
-    cards = yield g.pick(player, g.getCardNames(playerHand), [0,maxPickCount], meldCondition, meldOptions)
+    cards = await g.pick(player, g.getCardNames(playerHand), [0,maxPickCount], meldCondition, meldOptions)
     doMeld = cards.length > 0
 
     if (doMeld) {
@@ -388,7 +387,7 @@ function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOp
       console.assert(meldPlaces.length > 0)
 
       g.debugLog(`Player ${player} choose places to meld:`)
-      const places = yield g.pick(player, meldPlaces, 1)
+      const places = await g.pick(player, meldPlaces, 1)
 
       g.moveCards(cards, places[0], -1)
       g.debugLog(`${player} moves "${cards.join(',')}" cards to ${places[0]} (${g.getCardCount(places[0])}) - meld score ${getMeldScore(g, player)}`)
@@ -414,10 +413,10 @@ function* meld(g: Game, player: string, team: string, initialMeldOptions: MeldOp
   return n === 0
 }
 
-function* discard(g: Game, player: string, team: string) {
+async function discard(g: Game, player: string, team: string) {
   // TODO prohibit cancel on this pick
   g.debugLog(`Player ${player} choose a card to discard:`)
-  const cards = yield g.pick(player, g.getCardNames(`${player}_hand`), 1)
+  const cards = await g.pick(player, g.getCardNames(`${player}_hand`), 1)
   console.assert(cards.length === 1)
 
   // TODO handle rotation of wild cards - this is a UI problem, not a rules problem
@@ -495,21 +494,15 @@ function getScore(g: Game, player: string): number {
 // Game.play(setup, rules, getScore, playerClients, seed, !history)
 
 let playerClients = {
-  'a': Game.randomClient(), // Game.consoleClient(),
-  'b': Game.randomClient() // Game.consoleClient()
+  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(1, 1), // Game.consoleClient(),
+  'b': GameSystem.randomClient() // Game.consoleClient()
 }
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
 const content = document.getElementById('content')
 
-function update() {
-   gs.update()
-   m.render(content, m(BGGame, {gamesystem: gs}))
-   setTimeout(update, 0)
+function render() {
+  m.render(content, m(BGGame, {gamesystem: gs}))
 }
-update()
 
-// let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
-// let bgGameUI = React.createElement(BGGame, {gamesystem: gs})
-//
-// ReactDOM.render(bgGameUI, document.getElementById('content'))
+gs.run(() => requestAnimationFrame(render))
