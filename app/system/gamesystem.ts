@@ -72,6 +72,11 @@ export class GameSystem {
       let response = await Promise.race([rulesPromise, seekPromise])
       if (response === 'seek') {
         restartGame = true
+      } else {
+        // needed, to render the last frame of a seek
+        if (this.render) {
+          this.render()
+        }
       }
 
       this.pendingCommands = []
