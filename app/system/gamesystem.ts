@@ -72,11 +72,6 @@ export class GameSystem {
       let response = await Promise.race([rulesPromise, seekPromise])
       if (response === 'seek') {
         restartGame = true
-      } else {
-        // needed, to render the last frame of a seek
-        if (this.render) {
-          this.render()
-        }
       }
 
       this.pendingCommands = []
@@ -85,7 +80,7 @@ export class GameSystem {
   }
 
   private onGameUpdated() {
-    if (this.playback !== Playback.SEEK && this.render) {
+    if ((this.playback !== Playback.SEEK || this.replayIndex >= this.seekIndex) && this.render) {
       this.render()
     }
   }
@@ -188,9 +183,6 @@ export class GameSystem {
       } else if (this.playback === Playback.PLAY && this.replayIndex >= this.replay.length) {
         return
       } if (this.playback === Playback.SEEK && this.replayIndex >= this.seekIndex) {
-        if (this.render) {
-          this.render()
-        }
         this.playback = Playback.PAUSE
         return
       }

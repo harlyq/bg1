@@ -76,7 +76,7 @@ export const BGHistory = {
           max: gamesystem.replay.length,
           value: gamesystem.replayIndex,
           onchange: (e) => gamesystem.seek(parseInt(e.target.value)),
-          //oninput: (e) => gamesystem.seek(parseInt(e.target.value))
+          // oninput: (e) => gamesystem.seek(parseInt(e.target.value)) TODO need to manage overlapping requests
         })
       )
     )
