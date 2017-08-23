@@ -137,20 +137,45 @@ export default class Util {
     return false
   }
 
+  // returns the first highest index
   public static maxIndex<T>(list: T[]): number {
     let n = list.length
     if (n === 0) {
       return -1
     }
 
-    let maxIndex = 0
+    let bestIndex = 0
     for (var i = 1; i < n; ++i) {
-      if (list[i] > list[maxIndex]) {
-        maxIndex = i
+      if (list[i] > list[bestIndex]) {
+        bestIndex = i
       }
     }
 
-    return maxIndex
+    return bestIndex
+  }
+
+  // returns the index with the highest value, or multiple indices if there is a tie
+  public static maxIndices<T>(list: T[]): number[] {
+    let n = list.length
+    if (n === 0) {
+      return [-1]
+    }
+
+    let maxValue = list[0]
+    for (var i = 1; i < n; ++i) {
+      if (list[i] > maxValue) {
+        maxValue = list[i]
+      }
+    }
+
+    let indices = []
+    for (var i = 0; i < n; ++i) {
+      if (list[i] === maxValue) {
+        indices.push(i)
+      }
+    }
+    
+    return indices
   }
 
   public static swapElements<T>(list: T[], i: number, j: number): T[] {

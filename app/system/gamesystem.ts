@@ -53,11 +53,14 @@ export class GameSystem {
     this.render = render
 
     while (restartGame) {
-      this.g = new Game(this.asyncUpdate, this.setup, this.rules, Object.keys(this.playerClients), this.options, this.seed)
+      this.g = new Game("Game", this.asyncUpdate, this.setup, this.rules, Object.keys(this.playerClients), this.options, this.seed)
       // this.historyFile = `replay${seed}.json`
       this.replayIndex = 0
       this.g.render = this.onGameUpdated
       this.g.isRunning = true
+
+      // TODO this call is needed if we seek to the first state.  Hide it away in the Game c'tor
+      this.onGameUpdated()
 
       restartGame = false
 
@@ -72,6 +75,11 @@ export class GameSystem {
       let response = await Promise.race([rulesPromise, seekPromise])
       if (response === 'seek') {
         restartGame = true
+      } else {
+        // TODO this was copied from asyncUpdate - is there a better way?
+        if (this.playback === Playback.SEEK && this.replayIndex >= this.seekIndex) {
+          this.playback = Playback.PAUSE
+        }
       }
 
       this.pendingCommands = []
@@ -95,7 +103,7 @@ export class GameSystem {
 
     if (this.pendingCommands.length === 0) {
       this.run(this.render) // game finished, re-run to perform seek
-    } else if (!this.replayIndex || this.seekIndex < this.replayIndex) {
+    } else if (this.seekIndex < this.replayIndex) {
       this.resolveSeek('seek')
     } else {
       // going forward in time, process the pending commands to continue running
@@ -281,7 +289,7 @@ export class GameSystem {
       const choices: string[][] = commands.map((command, i) => {
         let choice: string[] = []
         if (i === randomIndex) {
-          let combinations = GameSystem.getValidCombinations(g, command)
+          let combinations = GameSystem.getValidCombinationsForCommand(g, command)
           if (combinations.length > 0) {
             const randomChoice = Util.randomInt(0, combinations.length)
             choice = combinations[randomChoice]
@@ -293,78 +301,83 @@ export class GameSystem {
     }
   }
 
-  // // TODO depth may be better as a number of rounds, rather than a number of questions
-  // public static monteCarloClient(depth: number, iterations: number): any {
-  //
-  //   // TODO parallel commands need to be considered as the the one layer of
-  //   // the monte carlo choice.  But what if there are multiple players on these
-  //   // randoms e.g. a secret vote by all players, maybe using the parallel as
-  //   // additional combinations is better, but the response will need to be per player
-  //   // Thus, if player 1 has 3 choices, then we have 3 combinations, but if 4
-  //   // players each have 2 choices then we have 4^2 (= 16) combinations
-  //   return GameSystem.processParallelCommands(async (g: Game, command: IPickCommand, scoreFn: (Game, string) => number, parallelCommands: IPickCommand[]): Promise<string[]> => {
-  //     const i = parallelCommands.indexOf(command)
-  //     const n = parallelCommands.length
-  //
-  //     // this pick combination list will be used at the beginning of all trials
-  //     const pickCombinations = GameSystem.getValidCombinations(g, command)
-  //     const m = pickCombinations.length
-  //
-  //     if (m === 0) {
-  //       return [] // no options, exit
-  //     } else if (m === 1) {
-  //       return pickCombinations[0] // only one option
-  //     }
-  //
-  //     let totals = Array(m).fill(0)
-  //     let trialSystem = new TrialSystem(g.setupFn, g.rules, g.getAllPlayerNames(), g.seed, []) //, g.getHistory())
-  //
-  //     // multiply by m to ensure we try each pickCombination the same number
-  //     // of times
-  //     for (let k = 0; k < iterations*m; ++k) {
-  //       let debugCandidates = []
-  //
-  //       // attempt 'depth' turns of the game
-  //       let pickIndex = k % m
-  //       let choice
-  //       let step = 0
-  //
-  //       await trialSystem.run((trial: Game, command: IPickCommand): string[] => {
-  //         if (step === depth) {
-  //           trialSystem.stop()
-  //           return []
-  //         }
-  //
-  //         choice = []
-  //         if (step === 0) {
-  //           choice = pickCombinations[pickIndex]
-  //         } else {
-  //           const combinations = GameSystem.getValidCombinations(trial, command)
-  //           if (combinations.length > 0) {
-  //             const randomIndex = Util.randomInt(0, combinations.length)
-  //             choice = combinations[randomIndex]
-  //           }
-  //         }
-  //         debugCandidates.push(choice)
-  //         trial.validateResult(command, choice)
-  //         step++
-  //         return choice
-  //       })
-  //
-  //       // find our score relative to the best opponent score at the end
-  //       // of this trial
-  //       let trialScore = GameSystem.getRelativeScore(trialSystem.trial, command.who, scoreFn)
-  //
-  //       totals[pickIndex] += trialScore
-  //     }
-  //
-  //     // take the option with the best overall score (all pickCombinations were
-  //     // trialled the same number of times so we don't need to calculate an
-  //     // average)
-  //     const bestPickIndex = Util.maxIndex(totals)
-  //     return pickCombinations[bestPickIndex]
-  //   })
-  // }
+  // TODO depth may be better as a number of rounds, rather than a number of questions
+  public static monteCarloClient(depth: number, iterations: number): any {
+
+    // TODO parallel commands need to be considered as the the one layer of
+    // the monte carlo choice.  But what if there are multiple players on these
+    // randoms e.g. a secret vote by all players, maybe using the parallel as
+    // additional combinations is better, but the response will need to be per player
+    // Thus, if player 1 has 3 choices, then we have 3 combinations, but if 4
+    // players each have 2 choices then we have 4^2 (= 16) combinations
+    return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number, parallelCommands: IPickCommand[]): Promise<string[][]> => {
+      // this pick combination list will be used at the beginning of all trials
+      let pickCombinations = GameSystem.getValidCombinations(g, commands)
+      const m = pickCombinations.length
+
+      if (m === 0) {
+        return [] // no options, exit
+      } else if (m === 1) {
+        return pickCombinations[0] // only one option
+      }
+
+      let totals = Array(m).fill(0)
+
+      // multiply by m to ensure we try each pickCombination the same number
+      // of times
+      for (let k = 0; k < iterations*m; ++k) {
+        let debugCandidates = []
+
+        // attempt 'depth' turns of the game
+        let pickIndex = k % m
+        let choice
+        let step = 0
+
+        const trialName = `Trial${k}`
+        let trialSystem = new TrialSystem(trialName, g.setupFn, g.rules, g.getAllPlayerNames(), g.seed, g.getHistory())
+
+        await trialSystem.run((trial: Game, commands: IPickCommand[]): string[][] => {
+          if (step >= depth) {
+            trialSystem.stop()
+            //return []
+          }
+
+          choice = []
+          if (step === 0) {
+            choice = pickCombinations[pickIndex]
+          } else {
+            const combinations = GameSystem.getValidCombinations(trial, commands)
+            if (combinations.length > 0) {
+              const randomIndex = Util.randomInt(0, combinations.length)
+              choice = combinations[randomIndex]
+            }
+          }
+
+          console.assert(choice.length === commands.length)
+          for (let i = 0; i < commands.length; ++i) {
+            trial.validateResult(commands[i], choice[i])
+          }
+
+          debugCandidates.push(choice)
+          step++
+          return choice
+        })
+
+        // find our score relative to the best opponent score at the end
+        // of this trial
+        let trialScore = GameSystem.getRelativeScore(trialSystem.trial, commands[0].who, scoreFn)
+
+        totals[pickIndex] += trialScore
+      }
+
+      // take the option with the best overall score (all pickCombinations were
+      // trialled the same number of times so we don't need to calculate an
+      // average)
+      const bestPickIndices = Util.maxIndices(totals)
+      const j = Util.randomInt(0, bestPickIndices.length)
+      return pickCombinations[bestPickIndices[j]]
+    }
+  }
 
   // a -1 in the count is replaced with countMax1
   private static parseCount(count: PickCount, countMax: number): [number, number] {
@@ -388,7 +401,24 @@ export class GameSystem {
     return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
   }
 
-  private static getValidCombinations(g: Game, command: IPickCommand): string[][] {
+  private static getValidCombinations(g: Game, commands: IPickCommand[]): string[][][] {
+    let allCombinations = []
+    const emptyCombinations = Array(commands.length).fill([])
+
+    for (let i = 0; i < commands.length; ++i) {
+      const command = commands[i]
+      const combinations = GameSystem.getValidCombinationsForCommand(g, command)
+      for (let combo of combinations) {
+        let response = emptyCombinations.slice()
+        response[i] = combo
+        allCombinations.push(response)
+      }
+    }
+
+    return allCombinations
+  }
+
+  private static getValidCombinationsForCommand(g: Game, command: IPickCommand): string[][] {
     const n = command.options.length
     const count = GameSystem.parseCount(command.count, n)
 
@@ -430,19 +460,20 @@ export class GameSystem {
 export class TrialSystem {
   trial: any
   rules: any
-  replay: string[][] = []
+  replay: string[][][] = []
   replayIndex: number = 0
   stopTrial: any
-  trialFn: (g: Game, command: IPickCommand) => string[]
+  trialFn: (g: Game, commands: IPickCommand[]) => string[][]
 
-  constructor(setup: SetupFn, rules: RulesFn, playerNames: string[], seed: number, replay: string[][]) {
+  constructor(name: string, setup: SetupFn, rules: RulesFn, playerNames: string[], seed: number, replay: string[][][]) {
     let trialOptions = {}
-    this.trial = new Game(this.trialUpdate.bind(this), setup, rules, playerNames, trialOptions, seed)
+    this.trialUpdate = this.trialUpdate.bind(this)
+    this.trial = new Game(name, this.trialUpdate, setup, rules, playerNames, trialOptions, seed)
     this.rules = rules
     this.replay = replay
   }
 
-  public async run(trialFn: (g: Game, command: IPickCommand) => string[]) {
+  public async run(trialFn: (g: Game, commands: IPickCommand[]) => string[][]) {
     console.assert(!this.stopTrial, 'trial is already running')
     this.trialFn = trialFn
     let stopTrialPromise = new Promise(resolve => { this.stopTrial = resolve })
@@ -451,16 +482,20 @@ export class TrialSystem {
   }
 
   public stop() {
-    this.stopTrial('trial ended')
-    delete this.stopTrial
+    if (typeof this.stopTrial === 'function') {
+      this.stopTrial('trial ended')
+      delete this.stopTrial
+    }
   }
 
-  private trialUpdate(pickCommand: IPickCommand): Promise<string[]> {
-    return new Promise<string[]>((resolve, reject) => {
-      if (this.replayIndex < this.replay.length) {
+  private trialUpdate(pickCommands: IPickCommand[]): Promise<string[][]> {
+    return new Promise<string[][]>((resolve, reject) => {
+      if (typeof this.stopTrial !== 'function') {
+        return // trial has ended, do nothing
+      } else if (this.replayIndex < this.replay.length) {
         resolve(this.replay[this.replayIndex++])
       } else {
-        resolve(this.trialFn(this.trial, pickCommand))
+        resolve(this.trialFn(this.trial, pickCommands))
       }
     })
   }

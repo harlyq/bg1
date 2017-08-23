@@ -149,7 +149,7 @@ function findWinner(g: Game): string {
 }
 
 let playerClients = {
-  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(1, 1), // Game.consoleClient(),
+  'a': GameSystem.monteCarloClient(1, 1), // Game.consoleClient(), GameSystem.randomClient(),
   'b': GameSystem.randomClient() // Game.consoleClient()
 }
 

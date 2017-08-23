@@ -75,6 +75,7 @@ export class Game {
     allValues: {}
   }
 
+  name: string = ''
   registeredConditions: PickCondition[] = []
   history: string[][][] = []
   uniqueId: number = 0
@@ -94,7 +95,8 @@ export class Game {
   choices: string[][] = []
   isRunning: boolean = false
 
-  constructor(pickFn: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+  constructor(name: string, pickFn: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+    this.name = name
     this.pickFn = pickFn
     this.setupFn = setupFn
     this.rules = rules
@@ -364,6 +366,7 @@ export class Game {
     console.assert(!this.data.allCards[card.name], `ICard (${card.name}) already exists`)
     this.insertCard(card, to, index)
     this.data.allCards[card.name] = card
+    this.debugLog(`addCard ${card.name} to ${to.name}`)
   }
 
   public addCard(card: ICard | ICard[], to: ILocation, index: number = -1): Game {
@@ -415,6 +418,7 @@ export class Game {
       console.assert(card === cardRemoved)
 
       this.insertCard(card, tos[iTo], toIndices[iToIndex])
+      this.debugLog(`moveCard ${card.name} to ${tos[iTo].name} at ${toIndices[iToIndex]}`)
 
       // iterate over the 'tos' first, then the 'toIndices'
       if (++iTo >= tos.length) {
@@ -469,6 +473,8 @@ export class Game {
       card = this.removeCard(froms[iFrom], fromIndices[iFromIndex])
       if (card) {
         this.insertCard(card, tos[iTo], toIndices[iToIndex])
+        this.debugLog(`moveCard ${card.name} to ${tos[iTo].name} at ${toIndices[iToIndex]}`)
+
         --count
         cardsMoved.push(card)
       }
@@ -615,6 +621,9 @@ export class Game {
         this.pickChoices.splice(myI, 1)
         this.pickCommands.splice(myI, 1)
 
+        if (choice.length > 0) {
+          this.debugLog(`player ${who} ${type} '${choice}' from [${options}]`)
+        }
         resolve(choice)
       }, 0)
     })
@@ -748,76 +757,6 @@ export class Game {
     return combinations
   }
 
-  // public static bruteForceClient(depth: number): any {
-  //
-  //   return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
-  //     let scores = Game.exhaustiveScoreOptions(g, command.id, command.options, command.who, scoreFn, depth)
-  //     let count = Game.parseCount(command.count)
-  //
-  //     // once all of the options have been tried pick the best
-  //     Util.fisherYates(scores) // shuffle so we don't always pick the first option if the scores are the same
-  //     scores.sort((a,b) => b.score - a.score) // sort by highest score
-  //
-  //     const choices = scores.slice(0, count[1]) // always take the max
-  //     return scores[0].optionIndex
-  //   }
-  // }
-
-  // TODO depth may be better as a number of rounds, rather than a number of questions
-  public static monteCarloClient(depth: number, iterations: number): any {
-
-    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
-      // this pick combination list will be used at the beginning of all trials
-      const pickCombinations = Game.getValidCombinations(g, command)
-      const n = pickCombinations.length
-
-      if (n === 0) {
-        return [] // no options, exit
-      }
-
-      let totals = Array(n).fill(0)
-
-      // multiply by n to ensure we try each pickCombination the same number
-      // of times
-      for (let k = 0; k < iterations*n; ++k) {
-        let {trial, trialItr, trialResult} = Game.createTrial(g)
-        let candidates = []
-
-        // attempt 'depth' turns of the game
-        let pickIndex = k % n
-        let choice
-
-        for (let j = 0; j < depth && !trialResult.done; ++j) {
-          choice = []
-          if (j === 0) {
-            choice = pickCombinations[pickIndex]
-          } else {
-            const combinations = Game.getValidCombinations(trial, trialResult.value)
-            if (combinations.length > 0) {
-              const randomIndex = Util.randomInt(0, combinations.length)
-              choice = combinations[randomIndex]
-            }
-          }
-          candidates.push(choice)
-          trial.validateResult(trialResult.value, choice)
-          trialResult = trialItr.next(choice)
-        }
-
-        // find our score relative to the best opponent score at the end
-        // of this trial
-        let trialScore = Game.getRelativeScore(trial, command.who, scoreFn)
-
-        totals[pickIndex] += trialScore
-      }
-
-      // take the option with the best overall score (all pickCombinations were
-      // trialled the same number of times so we don't need to calculate an
-      // average)
-      const bestPickIndex = Util.maxIndex(totals)
-      return pickCombinations[bestPickIndex]
-    }
-  }
-
   public static historyClient(history: string[][]): any {
     return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
       console.log(g.toString())
@@ -838,31 +777,6 @@ export class Game {
     return scores.reduce((m, x) => Math.max(m, x.score), scores[0].score)
   }
 
-  // we build a new game, and play the replay through that game
-  // once the replay is ended try a new option
-  private static createTrial(g, replayTo = -1): {trial: any, trialItr: any, trialResult: any} {
-    // TODO should place and card be internal constructs of the game, and all
-    // custom data must be managed through allValues?
-    // TODO ugly
-    // TODO replace pickFn with our trial function
-    let trial = new Game(g.pickFn, g.setupFn, g.rules, g.playerChain.toArray(), {}, g.seed) // TODO to save space, should we share the cards?
-
-    let trialItr = g.rules()
-    let trialResult = trialItr.next()
-    trialResult = trialItr.next(trial)
-
-    // run through the playback results
-    let replayIndex = 0
-    while (!trialResult.done && g.history[replayIndex] && (replayTo === -1 || replayIndex < replayTo)) {
-      let choice = g.history[replayIndex++]
-      trial.history.push(choice)
-      trial.validateResult(trialResult.value, choice)
-      trialResult = trialItr.next(choice)
-    }
-
-    return {trial, trialItr, trialResult}
-  }
-
   private static getRelativeScore(g: Game, player: string, scoreFn: (Game, string) => number): number {
     // find our score relative to the best opponent score
     let relativeScore = scoreFn(g, player)
@@ -877,39 +791,6 @@ export class Game {
     }
 
     return relativeScore
-  }
-
-  private static exhaustiveScoreOptions(g: Game, id: number, options: any[], player: string, scoreFn: (Game, string) => number, depth: number): {optionIndex: number, score: number}[] {
-    let opponent = g.playerChain.next(player) // TODO loop over all players
-    let scores = []
-
-    options.forEach((option, i) => {
-      let {trial, trialItr, trialResult} = Game.createTrial(g)
-
-      // try this option
-      if (!trialResult.done) {
-        trialResult = trialItr.next([id, i])
-      }
-
-      // either get scores by running further trials, or get the score from
-      // this trial
-      if (!trialResult.done && depth > 1) {
-        let subScores = Game.exhaustiveScoreOptions(trial, trialResult.value.id, trialResult.value.options, trialResult.value.who, scoreFn, depth - 1)
-        // TODO is it better to use the median score? or the lowest score? or the higest score?
-        // should we score the ai player differently from their opponent?
-        scores.push({optionIndex: i, score: Game.findBestScore(subScores)})
-
-        // if (trialResult.value.who === player) {
-        //   scores.push({optionIndex: i, score: findBestScore(subScores)})
-        // } else {
-        //   scores.push({optionIndex: i, score: findAverageScore(subScores)})
-        // }
-      } else {
-        scores.push({optionIndex: i, score: scoreFn(trial, player) - scoreFn(trial, opponent)})
-      }
-    })
-
-    return scores
   }
 
   public validateData() {

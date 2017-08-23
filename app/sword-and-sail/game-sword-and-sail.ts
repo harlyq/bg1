@@ -160,7 +160,7 @@ function setup(g: Game) {
     g['europe'].addEdge({name: edge, sectors: edge.split('.')})
   }
   g['europe'].resolveSectors()
-  console.log(g['europe'].getSectors().sort())
+  g.debugLog(g['europe'].getSectors().sort())
 
   // validate land based section names
   for (let region in REGIONS) {
@@ -205,7 +205,7 @@ function setup(g: Game) {
     ++colorIndex
   }
 
-  console.log('setup')
+  g.debugLog('setup')
 }
 
 async function rules(g: Game) {
@@ -215,13 +215,9 @@ async function rules(g: Game) {
   while (!winner) {
     // TODO disable the laogging during a Seek
     g.debugLog(`PLAYER ${player}`)
-    await round(g, player)
+    winner = await round(g, player)
     g.debugLog(g.getCardPlacements())
 
-    // a player can only win on their turn
-    if (isWinner(g, player)) {
-      winner = player
-    }
     player = g.playerChain.next(player)
   }
 
@@ -229,12 +225,13 @@ async function rules(g: Game) {
   g.debugLog(`Player ${winner} won`)
 }
 
-async function round(g: Game, player: string) {
+async function round(g: Game, player: string): Promise<string> {
   moveDiscardToDrawIfEmpty(g)
 
   let actionPoints = 3
+  let winner
 
-  while (actionPoints > 0) {
+  while (!winner && actionPoints > 0) {
     // each action returns the cost of doing the action, or 0 if the action is
     // not performed
     const possibleActions = [
@@ -247,7 +244,14 @@ async function round(g: Game, player: string) {
 
     const costs = await Promise.all(possibleActions)
     actionPoints = costs.reduce((ap, x) => ap -= x, actionPoints)
+
+    // only need to check the current player for the winning conditions
+    if (isWinner(g, player)) {
+      winner = player
+    }
   }
+
+  return winner
 }
 
 function moveDiscardToDrawIfEmpty(g: Game) {
@@ -373,13 +377,15 @@ async function playCard(g: Game, player: string): Promise<number> {
       return 0
     }
 
-    let pickedLocations = await g.pickCards(player, regionLocations, 1)
+    let pickedLocations = await g.pickLocations(player, regionLocations, 1)
     if (pickedLocations.length !== 1) {
       return 0
     }
 
     g.move(`${player}_armies`, pickedLocations, 1)
   }
+
+  g.moveCards(cards, 'discard', -1)
 
   return 1
 }
@@ -466,7 +472,7 @@ function getScore(g: Game, player: string): number {
 }
 
 let playerClients = {
-  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(1, 1), // Game.consoleClient(),
+  'a': GameSystem.monteCarloClient(6, 1), // Game.consoleClient(), // GameSystem.randomClient()
   'b': GameSystem.randomClient() // Game.consoleClient()
 }
 
