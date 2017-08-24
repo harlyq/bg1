@@ -23,14 +23,13 @@ const pitChain = {
 }
 
 function setup(g: Game) {
-  const places = pitNames.map(name => { return {name}})
-  places.map(p => g.addLocation(p))
+  pitNames.map(name => g.addLocation(name))
 
   let stone = 0
   for (let pit = 0; pit < pitCounts.length; ++pit) {
     const count = pitCounts[pit]
     for (let i = 0; i < count; ++i, ++stone) {
-      g.addCard({name: `s${stone}`}, places[pit])
+      g.addCard(pitNames[pit], `s${stone}`)
     }
   }
 
@@ -54,7 +53,7 @@ async function rules(g: Game) {
 }
 
 async function turn(g: Game, player: string): Promise<string> {
-  const validLocations = g.filterLocations(p => p.cards.length > 0 && playerPits[player].indexOf(p.name) >= 0).map(p => p.name)
+  const validLocations: string[] = g.filterLocations(loc => g.getCardCount(loc) > 0 && playerPits[player].indexOf(loc) >= 0)
   const result: string[] = await g.pickLocations(player, validLocations)
 
   if (g.options.debug) {
@@ -72,7 +71,7 @@ async function turn(g: Game, player: string): Promise<string> {
 }
 
 function moveStones(g: Game, player: string, pitName: string): string {
-  const stones = g.getCardNames(pitName)
+  const stones: string[] = g.getCards(pitName)
   let nextPit = pitName
 
   while (stones.length > 0) {

@@ -334,7 +334,7 @@ export class GameSystem {
         let step = 0
 
         const trialName = `Trial${k}`
-        let trialSystem = new TrialSystem(trialName, g.setupFn, g.rules, g.getAllPlayerNames(), g.seed, g.getHistory())
+        let trialSystem = new TrialSystem(trialName, g.setupFn, g.rules, g.getAllPlayers(), g.seed, g.getHistory())
 
         await trialSystem.run((trial: Game, commands: IPickCommand[]): string[][] => {
           if (step >= depth) {

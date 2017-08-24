@@ -7,23 +7,24 @@ import * as seedrandom from 'seedrandom'
 
 export interface IPlayer {
   name: string
+  data?: any
 }
 
-export interface ICard {
+interface ICard {
   name: string
   value?: any
-  [others: string]: any
+  data?: any
 }
 
-export interface IDice extends ICard {
+interface IDice extends ICard {
   faces: any[]
 }
 
-export interface ILocation {
+interface ILocation {
   name: string
   value?: any
   cards?: string[]
-  [others: string]: any
+  data?: any
 }
 
 type CardLocation = [ILocation, number]
@@ -52,6 +53,7 @@ type Index = number | number[]
 
 interface INamed {
   name: string
+  data?: any
 }
 
 export interface IGameOptions {
@@ -95,7 +97,7 @@ export class Game {
   choices: string[][] = []
   isRunning: boolean = false
 
-  constructor(name: string, pickFn: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+  constructor(name: string, pickFn?: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
     this.name = name
     this.pickFn = pickFn
     this.setupFn = setupFn
@@ -107,7 +109,7 @@ export class Game {
 
     // TODO where is the best place to do this?
     if (Array.isArray(playerNames)) {
-      playerNames.forEach(x => this.addPlayer({name: x}))
+      playerNames.forEach(x => this.addPlayer(x))
     }
 
     if (options) {
@@ -161,23 +163,29 @@ export class Game {
     return this.history
   }
 
-  static filterThings<T>(name: string | string[] | ((INamed) => boolean), things: {[name: string]: T & INamed}): (T & INamed)[] {
-    if (typeof name === 'function') {
-      let results = []
+  static filterThingsInternal<T>(fn: string | string[] | ((string, any) => boolean), things: {[name: string]: T & INamed}): (T & INamed)[] {
+    if (typeof fn === 'function') {
+      let results: (T & INamed)[] = []
       for (let key in things) {
-        if (things[key] && name(things[key])) {
+        if (things[key] && fn(key, things[key].data)) {
           results.push(things[key])
         }
       }
       return results
-    } else if (typeof name === 'string') {
-      if (things[name]) {
-        return [things[name]]
+    } else if (typeof fn === 'string') {
+      if (things[fn]) {
+        return [things[fn]]
       }
-    } else if (Array.isArray(name)) {
-      return name.map(r => things[r]).filter(x => x) // the output is the same order as the input
+    } else if (Array.isArray(fn)) {
+      const list: string[] = fn
+      return list.map(r => things[r]).filter(x => x) // the output is the same order as the input
     }
     return []
+  }
+
+  static filterThings<T>(name: string | string[] | ((INamed) => boolean), things: {[name: string]: T & INamed}): string[] {
+    const results = Game.filterThingsInternal<T>(name, things)
+    return results.map(x => x.name)
   }
 
   public setValue(name: string, value: any) {
@@ -203,12 +211,8 @@ export class Game {
     return this.registeredConditions.length - 1
   }
 
-  public filterCards(cardName: CardName): ICard[] {
+  public filterCards(cardName: CardName): string[] {
     return Game.filterThings(cardName, this.data.allCards)
-  }
-
-  public filterCardNames(cardName: CardName): string[] {
-    return Game.filterThings(cardName, this.data.allCards).map(p => p.name)
   }
 
   public getCardByName(cardName: string): ICard {
@@ -223,23 +227,19 @@ export class Game {
     return this.data.allPlayers[playerName]
   }
 
-  public getCards(locationName: LocationName): ICard[] {
-    const locations: ILocation[] = Game.filterThings(locationName, this.data.allLocations)
-    let cards: ICard[] = []
+  public getCards(locationName: LocationName): string[] {
+    const locations: ILocation[] = Game.filterThingsInternal(locationName, this.data.allLocations)
+    let cards: string[] = []
     for (let place of locations) {
       for (let cardName of place.cards) {
-        cards.push(this.getCardByName(cardName))
+        cards.push(cardName)
       }
     }
     return cards
   }
 
-  public getCardNames(locationName: LocationName): string[] {
-    return this.getCards(locationName).map(x => x.name)
-  }
-
   public getCardCount(locationName: LocationName): number {
-    const locations: ILocation[] = Game.filterThings(locationName, this.data.allLocations)
+    const locations: ILocation[] = Game.filterThingsInternal(locationName, this.data.allLocations)
     let length = 0
     for (let place of locations) {
       length += place.cards.length
@@ -247,23 +247,36 @@ export class Game {
     return length
   }
 
-  public filterLocations(locationName: LocationName): ILocation[] {
+  public getCardData(cardName: string): any {
+    const card = this.data.allCards[cardName]
+    if (card) {
+      return card.data
+    }
+  }
+
+  public getLocationData(locationName: string): any {
+    const location = this.data.allLocations[locationName]
+    if (location) {
+      return location.data
+    }
+  }
+
+  public getPlayerData(playerName: string): any {
+    const player = this.data.allLocations[playerName]
+    if (player) {
+      return player.data
+    }
+  }
+
+  public filterLocations(locationName: LocationName): string[] {
     return Game.filterThings(locationName, this.data.allLocations)
   }
 
-  public filterLocationNames(locationName: LocationName): string[] {
-    return Game.filterThings(locationName, this.data.allLocations).map(p => p.name)
-  }
-
-  public filterPlayers(playerName: PlayerName): IPlayer[] {
+  public filterPlayers(playerName: PlayerName): string[] {
     return Game.filterThings(playerName, this.data.allPlayers)
   }
 
-  public filterPlayerNames(playerName: PlayerName): string[] {
-    return Game.filterThings(playerName, this.data.allPlayers).map(p => p.name)
-  }
-
-  public getAllPlayerNames(): string[] {
+  public getAllPlayers(): string[] {
     return Object.keys(this.data.allPlayers)
   }
 
@@ -331,10 +344,15 @@ export class Game {
     return card
   }
 
-  public addPlayer(player: IPlayer): Game {
-    console.assert(!this.data.allPlayers[player.name], `ICard (${player.name}) already exists`)
+  private addPlayerInternal(player: IPlayer): Game {
+    console.assert(!this.data.allPlayers[player.name], `(${player.name}) already exists`)
     this.data.allPlayers[player.name] = player
     this.playerChain.add(player.name)
+    return this
+  }
+
+  public addPlayer(name: string, data?: any): Game {
+    this.addPlayerInternal({name, data})
     return this
   }
 
@@ -350,15 +368,10 @@ export class Game {
     }
   }
 
-  public addLocation(place: ILocation | ILocation[]): Game {
+  public addLocation(locationName: string, locationData?: any): Game {
     // TODO assert that place.name is unique??
-    if (Array.isArray(place)) {
-      for (let p of place) {
-        this.addLocationInternal(p)
-      }
-    } else {
-      this.addLocationInternal(place)
-    }
+    const location = {name: locationName, data: locationData, cards: []}
+    this.addLocationInternal(location)
     return this
   }
 
@@ -369,15 +382,12 @@ export class Game {
     this.debugLog(`addCard ${card.name} to ${to.name}`)
   }
 
-  public addCard(card: ICard | ICard[], to: ILocation, index: number = -1): Game {
+  public addCard(locationName: string, cardName: string, cardData?: any, index: number = -1): Game {
     // TODO assert that card.name is unique??
-    if (Array.isArray(card)) {
-      for (let c of card) {
-        this.addCardInternal(c, to, index)
-      }
-    } else {
-      this.addCardInternal(card, to, index)
-    }
+    const card = {name: cardName, data: cardData}
+    const location = this.data.allLocations[locationName]
+    console.assert(typeof location !== 'undefined')
+    this.addCardInternal(card, location, index)
     return this
   }
 
@@ -397,8 +407,8 @@ export class Game {
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
   public moveCards(cardName: CardName, toName: LocationName, count: number = -1, toIndex: Index = -1): ICard[] {
-    const cards: ICard[] = this.filterCards(cardName)
-    const tos: ILocation[] = this.filterLocations(toName)
+    const cards: ICard[] = Game.filterThingsInternal(cardName, this.data.allCards)
+    const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
     console.assert(cards.length > 0, `unable to find cards "${cardName}"`)
@@ -437,8 +447,8 @@ export class Game {
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
   public move(fromName: LocationName, toName: LocationName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): ICard[] {
-    const froms: ILocation[] = this.filterLocations(fromName)
-    const tos: ILocation[] = this.filterLocations(toName)
+    const froms: ILocation[] = Game.filterThingsInternal(fromName, this.data.allLocations)
+    const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
@@ -506,7 +516,7 @@ export class Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = this.filterLocations(name) // should only have 0 or 1 entries
+      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `unable to find place - ${name}`)
       this.fisherYates(locations[0].cards)
     }
@@ -517,7 +527,7 @@ export class Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = this.filterLocations(name) // should have 0 or 1 entries
+      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
       if (locations.length > 0) {
         locations[0].cards.reverse()
       }
@@ -529,7 +539,7 @@ export class Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = this.filterLocations(name)
+      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
       if (locations.length > 0) {
         for (let card of locations[0].cards) {
           let dice = this.data.allCards[card] as IDice

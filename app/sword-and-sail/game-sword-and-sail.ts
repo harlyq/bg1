@@ -1,4 +1,4 @@
-import {Game, ILocation, ICard} from "../system/game"
+import {Game} from "../system/game"
 import {GameSystem} from "../system/gamesystem"
 import {Chain} from "../system/chain"
 import {Graph} from "../system/graph"
@@ -98,6 +98,23 @@ const EUROPE_EDGES = [
   'Aegean Sea.Thracia', 'Mediterranean Sea.Numidia', 'Mediterranean Sea.Cyrenaica',
 ]
 
+let europe = new Graph()
+
+// create map of europe
+for (let edge of EUROPE_EDGES) {
+  europe.addEdge({name: edge, sectors: edge.split('.')})
+}
+europe.resolveSectors()
+console.log(europe.getSectors().sort())
+
+// validate land based section names
+for (let region in REGIONS) {
+  for (let sector of REGIONS[region]) {
+    console.assert(typeof europe.getSector(sector) === 'object', `could not find sector ${sector}`)
+  }
+}
+
+
 const ACTION_CARDS: {count: number, type: string}[] = [
   {count: 1, type: 'Britannia'},
   {count: 2, type: 'Scandia'},
@@ -116,29 +133,29 @@ function isWater(sectorName: string): boolean {
 }
 
 function getPlayerLocations(g: Game, player: string): string[] {
-  const playerLocations = g.filterLocationNames((loc: ILocation) => {
-    return g['europe'].getSector(loc.name) && getLocationOwner(g, loc.name) === player
+  const playerLocations = g.filterLocations((loc) => {
+    return europe.getSector(loc) && getLocationOwner(g, loc) === player
   })
   return playerLocations
 }
 
 function getEnemyLocations(g: Game, player: string): string[] {
-  const enemyLocations = g.filterLocationNames((loc: ILocation) => {
-    return g['europe'].getSector(loc.name) && isOccupied(g, loc.name) && getLocationOwner(g, loc.name) !== player
+  const enemyLocations = g.filterLocations((loc) => {
+    return europe.getSector(loc) && isOccupied(g, loc) && getLocationOwner(g, loc) !== player
   })
   return enemyLocations
 }
 
 function isPlayerLocation(g: Game, player: string, location: string): boolean {
-  return g.getCards(location).filter((iCard: ICard) => iCard.owner === player).length > 0
+  return g.getCards(location).filter((card) => g.getCardData(card).owner === player).length > 0
 }
 
 function isNavyLocation(g: Game, location: string): boolean {
-  return g.getCards(location).filter((iCard: ICard) => iCard.type === 'navy').length  > 0
+  return g.getCards(location).filter((card) => g.getCardData(card).type === 'navy').length  > 0
 }
 
 function isArmyLocation(g: Game, location: string): boolean {
-  return g.getCards(location).filter((iCard: ICard) => iCard.type === 'army').length  > 0
+  return g.getCards(location).filter((card) => g.getCardData(card).type === 'army').length  > 0
 }
 
 function isOccupied(g: Game, location: string): boolean {
@@ -146,60 +163,42 @@ function isOccupied(g: Game, location: string): boolean {
 }
 
 function getLocationOwner(g: Game, location: string): string {
-  let iCards: ICard[] = g.getCards(location)
-  if (iCards.length > 0) {
-    return iCards[0].owner
+  const cards: string[] = g.getCards(location)
+  if (cards.length > 0) {
+    return g.getCardData(cards[0]).owner
   }
 }
 
 function setup(g: Game) {
-  g['europe'] = new Graph()
+  europe.getSectors().map(sector => g.addLocation(sector))
 
-  // create map of europe
-  for (let edge of EUROPE_EDGES) {
-    g['europe'].addEdge({name: edge, sectors: edge.split('.')})
-  }
-  g['europe'].resolveSectors()
-  g.debugLog(g['europe'].getSectors().sort())
-
-  // validate land based section names
-  for (let region in REGIONS) {
-    for (let sector of REGIONS[region]) {
-      console.assert(typeof g['europe'].getSector(sector) === 'object', `could not find sector ${sector}`)
-    }
-  }
-
-  g.addLocation(g['europe'].getSectors().map(sector => { return {name: sector} }))
-
-
-  let drawLocation = {name: 'draw'}
-  g.addLocation(drawLocation)
-  g.addLocation({name: 'discard'})
+  g.addLocation('draw')
+  g.addLocation('discard')
 
   // create action cards
   for (let cardSet of ACTION_CARDS) {
     for (let i = 0; i < cardSet.count; ++i) {
       const type = cardSet.type
-      g.addCard({name: `${type}${i}`, type: `${type}`}, drawLocation)
+      g.addCard('draw', `${type}${i}`, {type: `${type}`})
       console.assert(type === 'Voyage' || REGIONS[type])
     }
   }
   g.shuffle('draw')
 
   let colorIndex = 0
-  for (let player of g.getAllPlayerNames()) {
-    let playerHand = {name: `${player}_hand`}
-    let armyLocation = {name: `${player}_armies`}
-    let navyLocation = {name: `${player}_navies`}
+  for (let player of g.getAllPlayers()) {
+    const playerHand = `${player}_hand`
+    const armyLocation = `${player}_armies`
+    const navyLocation = `${player}_navies`
 
-    g.addLocation([playerHand, armyLocation, navyLocation])
+    g.addLocation(playerHand).addLocation(armyLocation).addLocation(navyLocation)
 
     for (let i = 0; i < NUM_ARMIES_PER_PLAYER; ++i) {
-      g.addCard({name: `${player}_army_${i}`, kind: 'army', color: COLORS[colorIndex], owner: player}, armyLocation)
+      g.addCard(armyLocation, `${player}_army_${i}`, {kind: 'army', color: COLORS[colorIndex], owner: player})
     }
 
     for (let i = 0; i < NUM_NAVIES_PER_PLAYER; ++i) {
-      g.addCard({name: `${player}_navy_${i}`, kind: 'navy', color: COLORS[colorIndex], owner: player}, navyLocation)
+      g.addCard(navyLocation, `${player}_navy_${i}`, {kind: 'navy', color: COLORS[colorIndex], owner: player})
     }
 
     ++colorIndex
@@ -209,7 +208,7 @@ function setup(g: Game) {
 }
 
 async function rules(g: Game) {
-  let player = g.getAllPlayerNames()[0]
+  let player = g.getAllPlayers()[0]
 
   let winner
   while (!winner) {
@@ -255,7 +254,7 @@ async function round(g: Game, player: string): Promise<string> {
 }
 
 function moveDiscardToDrawIfEmpty(g: Game) {
-  if (g.getCardNames('draw').length === 0) {
+  if (g.getCardCount('draw') === 0) {
     g.move('discard', 'draw', -1)
     g.shuffle('draw')
   }
@@ -264,7 +263,7 @@ function moveDiscardToDrawIfEmpty(g: Game) {
 async function takeCard(g: Game, player: string): Promise<number> {
   // add a card from your hand (maximum of 3 cards in your hand)
   const playerHand = `${player}_hand`
-  if (g.getCardNames(playerHand).length >= MAX_CARDS_PER_HAND) {
+  if (g.getCardCount(playerHand) >= MAX_CARDS_PER_HAND) {
     return 0
   }
 
@@ -280,12 +279,12 @@ async function takeCard(g: Game, player: string): Promise<number> {
 async function discardCard(g: Game, player: string): Promise<number> {
   // discard a card from your hand
   const playerHand = `${player}_hand`
-  if (g.getCardNames(playerHand).length === 0) {
+  if (g.getCardCount(playerHand) === 0) {
     return 0
   }
 
   // console.assert(g.getCardNames(playerHand).length > 0)
-  let cards = await g.pickCards(player, g.getCardNames(playerHand), 1)
+  let cards = await g.pickCards(player, g.getCards(playerHand), 1)
   if (cards.length !== 1) {
     return 0
   }
@@ -314,10 +313,10 @@ async function moveUnit(g: Game, player: string): Promise<number> {
   }
   // console.assert(startLocations.length === 1)
 
-  let isNavyUnit = g.getCards(startLocations)[0].kind === 'Navy'
+  let isNavyUnit = g.getCardData(g.getCards(startLocations)[0]).kind === 'Navy'
 
   // pick an adjacent sector (armies can only move onto land)
-  let adjacentLocations = g['europe'].getAdjacentSectors(startLocations[0])
+  let adjacentLocations = europe.getAdjacentSectors(startLocations[0])
   let validLocations = isNavyUnit ? adjacentLocations : adjacentLocations.filter(loc => !isWater(loc))
   validLocations = validLocations.filter(loc => !isOccupied(g, loc))
 
@@ -336,16 +335,16 @@ async function moveUnit(g: Game, player: string): Promise<number> {
 // if there are no free land areas
 async function playCard(g: Game, player: string): Promise<number> {
   const playerHand = `${player}_hand`
-  if (g.getCardNames(playerHand).length === 0) {
+  if (g.getCardCount(playerHand) === 0) {
     return 0
   }
 
-  let cards = await g.pickCards(player, g.getCardNames(playerHand), 1)
+  let cards = await g.pickCards(player, g.getCards(playerHand), 1)
   if (cards.length !== 1) {
     return 0
   }
 
-  let cardType = (g.filterCards(cards)[0] as any).type
+  let cardType = g.getCardData(cards[0]).type
   if (cardType === 'Voyage') {
     // turn one army into a navy
     if (g.getCards(`${player}_navies`).length === 0) {
@@ -353,7 +352,7 @@ async function playCard(g: Game, player: string): Promise<number> {
     }
 
     let ownedLocations = getPlayerLocations(g, player)
-    let ownedArmyLocations = ownedLocations.filter(loc => g.getCards(loc)[0].type === 'Army')
+    let ownedArmyLocations = ownedLocations.filter(loc => g.getCardData(g.getCards(loc)[0]).type === 'Army')
     if (ownedArmyLocations.length !== 1) {
       return 0
     }
@@ -362,7 +361,7 @@ async function playCard(g: Game, player: string): Promise<number> {
     if (armyLocations.length !== 1) {
       return 0
     }
-    let armyUnit = g.getCardNames(armyLocations[0])[0]
+    let armyUnit = g.getCards(armyLocations[0])[0]
 
     g.moveCards(armyUnit, `${player}_armies`)
     g.move(`${player}_navies`, armyLocations, 1)
@@ -398,10 +397,10 @@ async function attackUnit(g: Game, player: string, actionPoints: number): Promis
   // two units attack an adjacent enemy unit
   const enemyLocations = getEnemyLocations(g, player)
   const attackableEnemyLocations = enemyLocations.filter(locationName => {
-    if (!g['europe'].getSector(locationName)) {
+    if (!europe.getSector(locationName)) {
       return false
     }
-    let adjacentLocations = g['europe'].getAdjacentSectors(locationName)
+    let adjacentLocations = europe.getAdjacentSectors(locationName)
     let playerAdjacent = adjacentLocations.reduce((count, loc) => count += isPlayerLocation(g, player, loc) ? 1 : 0, 0)
     return playerAdjacent >= MIN_UNITS_TO_ATTACK
   })
@@ -417,7 +416,7 @@ async function attackUnit(g: Game, player: string, actionPoints: number): Promis
   }
 
   let targetPlayer = getLocationOwner(g, targetLocations[0])
-  let possibleAttackers = g['europe'].getAdjacentSectors(targetLocations[0]).filter(loc => isPlayerLocation(g, player, loc))
+  let possibleAttackers = europe.getAdjacentSectors(targetLocations[0]).filter(loc => isPlayerLocation(g, player, loc))
   if (possibleAttackers.length < MIN_UNITS_TO_ATTACK) {
     return 0
   }
@@ -472,7 +471,7 @@ function getScore(g: Game, player: string): number {
 }
 
 let playerClients = {
-  'a': GameSystem.monteCarloClient(6, 1), // Game.consoleClient(), // GameSystem.randomClient()
+  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(6, 1), // Game.consoleClient(), // GameSystem.randomClient()
   'b': GameSystem.randomClient() // Game.consoleClient()
 }
 
