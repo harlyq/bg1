@@ -120,7 +120,7 @@ export class Game {
       setupFn(this)
     }
 
-    if (this.render) {
+    if (this.render && this.options.debug) {
       this.render()
     }
   }
@@ -437,7 +437,7 @@ export class Game {
       }
     }
 
-    if (this.render) {
+    if (this.render && this.options.debug) {
       this.render()
     }
 
@@ -505,7 +505,7 @@ export class Game {
       }
     } while (count > 0)
 
-    if (this.render) {
+    if (this.render && this.options.debug) {
       this.render()
     }
 
@@ -591,9 +591,9 @@ export class Game {
     return new Promise<string[]>((resolve) => {
 
       // we may receive several pick requests in the same frame, these are
-      // pushed onto 'pickCommands', the setTimeout is used to process the
+      // pushed onto 'pickCommands', the Promise.resolve() is used to process the
       // commands once all of them have been received
-      setTimeout(async () => {
+      Promise.resolve().then(async () => {
         console.assert(this.pickCommands.length > 0)
 
         const i = this.pickCommands.indexOf(command)
@@ -635,7 +635,7 @@ export class Game {
           this.debugLog(`player ${who} ${type} '${choice}' from [${options}]`)
         }
         resolve(choice)
-      }, 0)
+      })
     })
   }
 

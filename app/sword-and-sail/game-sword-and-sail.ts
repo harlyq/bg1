@@ -217,11 +217,18 @@ async function rules(g: Game) {
     winner = await round(g, player)
     g.debugLog(g.getCardPlacements())
 
+    if (g.options.debug) {
+      await delayToRenderPage()
+    }
     player = g.playerChain.next(player)
   }
 
   g.debugLog(g.toString())
   g.debugLog(`Player ${winner} won`)
+}
+
+async function delayToRenderPage(): Promise<{}> {
+  return new Promise(resolve => setTimeout(resolve))
 }
 
 async function round(g: Game, player: string): Promise<string> {
@@ -471,7 +478,7 @@ function getScore(g: Game, player: string): number {
 }
 
 let playerClients = {
-  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(6, 1), // Game.consoleClient(), // GameSystem.randomClient()
+  'a': GameSystem.monteCarloClient(10, 3), // Game.consoleClient(), // GameSystem.randomClient()
   'b': GameSystem.randomClient() // Game.consoleClient()
 }
 
