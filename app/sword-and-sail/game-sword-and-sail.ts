@@ -98,21 +98,27 @@ const EUROPE_EDGES = [
   'Aegean Sea.Thracia', 'Mediterranean Sea.Numidia', 'Mediterranean Sea.Cyrenaica',
 ]
 
-let europe = new Graph()
+function buildMapOfEurope(): Graph {
+  let map = new Graph()
 
-// create map of europe
-for (let edge of EUROPE_EDGES) {
-  europe.addEdge({name: edge, sectors: edge.split('.')})
-}
-europe.resolveSectors()
-console.log(europe.getSectors().sort())
-
-// validate land based section names
-for (let region in REGIONS) {
-  for (let sector of REGIONS[region]) {
-    console.assert(typeof europe.getSector(sector) === 'object', `could not find sector ${sector}`)
+  // create map of europe
+  for (let edge of EUROPE_EDGES) {
+    map.addEdge({name: edge, sectors: edge.split('.')})
   }
+  map.resolveSectors()
+  console.log(map.getSectors().sort())
+
+  // validate land based section names
+  for (let region in REGIONS) {
+    for (let sector of REGIONS[region]) {
+      console.assert(typeof map.getSector(sector) === 'object', `could not find sector ${sector}`)
+    }
+  }
+
+  return map
 }
+
+const europe = buildMapOfEurope()
 
 
 const ACTION_CARDS: {count: number, type: string}[] = [
@@ -217,18 +223,12 @@ async function rules(g: Game) {
     winner = await round(g, player)
     g.debugLog(g.getCardPlacements())
 
-    if (g.options.debug) {
-      await delayToRenderPage()
-    }
+    await g.queueRender()
     player = g.playerChain.next(player)
   }
 
   g.debugLog(g.toString())
   g.debugLog(`Player ${winner} won`)
-}
-
-async function delayToRenderPage(): Promise<{}> {
-  return new Promise(resolve => setTimeout(resolve))
 }
 
 async function round(g: Game, player: string): Promise<string> {

@@ -33,31 +33,30 @@ function getNumTeams(g: Game) {
 }
 
 function setup(g: Game) {
-  let draw = {name: 'draw'}
-  g.addLocation(draw)
-  g.addLocation({name: 'discard'})
+  g.addLocation('draw')
+  g.addLocation('discard')
 
-  for (let player of g.filterPlayerNames(p => true)) {
-    g.addLocation({name: `${player}_hand`})
+  for (let player of g.getAllPlayers()) {
+    g.addLocation(`${player}_hand`)
   }
 
   const numTeams = getNumTeams(g)
   for (let i = 1; i <= numTeams; ++i) {
     for (let rank of RANKS) {
-      g.addLocation({name: `team${i}_meld_${rank}`})
+      g.addLocation(`team${i}_meld_${rank}`)
     }
-    g.addLocation({name: `team${i}_redThrees`})
+    g.addLocation(`team${i}_redThrees`)
   }
 
   for (let deck of [1,2]) {
     for (let suit of SUITS) {
       for (let rank of RANKS) {
-        g.addCard({name: `${rank}${suit}${deck}`}, draw)
+        g.addCard('draw', `${rank}${suit}${deck}`)
       }
     }
     // add two jokers to each deck
-    g.addCard({name: `WB${deck}`}, draw)
-    g.addCard({name: `WR${deck}`}, draw)
+    g.addCard('draw', `WB${deck}`)
+    g.addCard('draw', `WR${deck}`)
   }
 
   g.registerCondition(meldCondition)
@@ -65,7 +64,7 @@ function setup(g: Game) {
 
 // teams are numbered from 1 to n
 function getTeam(g: Game, player: string): string {
-  const allPlayers: string[] = g.filterPlayerNames(p => true)
+  const allPlayers: string[] = g.getAllPlayers()
   const numPlayers = allPlayers.length
   const numTeams = getNumTeams(g)
   const team = (allPlayers.indexOf(player) % numTeams) + 1
@@ -83,6 +82,7 @@ async function rules(g: Game) {
     gameOver = await turn(g, player)
     if (!gameOver) {
       player = g.playerChain.next(player)
+      await g.queueRender()
     }
   }
 
@@ -157,13 +157,13 @@ function hasAllRedThrees(cards: string[]): boolean {
 function deal(g: Game) {
   g.shuffle('draw')
 
-  for (let player of g.getAllPlayerNames()) {
+  for (let player of g.getAllPlayers()) {
     const team = getTeam(g, player)
 
     let numDraw = NUM_INITIAL_CARDS
     while (numDraw > 0) {
       const cards = g.move('draw', `${player}_hand`, numDraw)
-      let redThrees = g.getCardNames(`${player}_hand`).filter(c => isRedThree(c))
+      let redThrees = g.getCards(`${player}_hand`).filter(c => isRedThree(c))
       numDraw = redThrees.length // replace all of the red threes drawn
 
       if (numDraw > 0) {
@@ -175,8 +175,8 @@ function deal(g: Game) {
 
   let drawCard = true
   while (drawCard) {
-    let lastDrawn = g.move('draw', 'discard', 1) // do we want to return Cards or CardNames?
-    drawCard = isWildCard(lastDrawn[0].name) || isRedThree(lastDrawn[0].name)
+    let lastDrawn: string[] = g.move('draw', 'discard', 1) // do we want to return Cards or CardNames?
+    drawCard = isWildCard(lastDrawn[0]) || isRedThree(lastDrawn[0])
   }
 }
 
@@ -192,10 +192,10 @@ async function turn(g:Game, player: string) {
 }
 
 async function draw(g: Game, player: string, team: string) {
-  const discards = g.getCardNames('discard')
+  const discards = g.getCards('discard')
   console.assert(discards.length > 0)
 
-  const playerHand = g.getCardNames(`${player}_hand`)
+  const playerHand = g.getCards(`${player}_hand`)
   const playerHandBuckets = Util.countBuckets(playerHand, c => getCardRank(c))
 
   const wasPackFrozen = isPackFrozen(discards)
@@ -234,7 +234,7 @@ async function draw(g: Game, player: string, team: string) {
 
     const discardMeldPlace = `team${team}_meld_${topDiscardRank}`
     const discardCard = g.move('discard', discardMeldPlace, 1)
-    console.assert(discardCard[0].name === topDiscard)
+    console.assert(discardCard[0] === topDiscard)
 
     if (g.getCardCount(discardMeldPlace) < MIN_MELD_SIZE) {
       const oldMeldScore = getMeldScore(g, player)
@@ -263,15 +263,15 @@ async function draw(g: Game, player: string, team: string) {
     let drawCard = 1
     while (drawCard > 0) {
       let cards = g.move('draw', `${player}_hand`, drawCard)
-      g.debugLog(`${player} draws a card "${cards[0].name}" (${g.getCardCount('draw')})`)
-      drawCard = cards.filter(c => isRedThree(c.name)).length
+      g.debugLog(`${player} draws a card "${cards[0]}" (${g.getCardCount('draw')})`)
+      drawCard = cards.filter(c => isRedThree(c)).length
 
       if (drawCard > 0) {
         if (g.getCardCount('draw') === 0) {
           return true // end immediately if the last card of the draw was a red three
         }
 
-        g.moveCards(cards[0].name, `team${team}_redThrees`, 1)
+        g.moveCards(cards[0], `team${team}_redThrees`, 1)
         g.debugLog(`player ${player} has a red three, draw again`)
       }
     }
@@ -343,14 +343,14 @@ function getMeldPlaces(g: Game, player: string, cards: string[], options: MeldOp
     // only wild cards
     for (let rank of RANKS) {
       const meldPlace = `team${team}_meld_${rank}`
-      const meldCards = Util.arrayUnion(g.getCardNames(meldPlace), cards)
+      const meldCards = Util.arrayUnion(g.getCards(meldPlace), cards)
       if (isValidMeld(meldCards)) {
         validMelds.push(meldPlace)
       }
     }
   } else {
     const meldPlace = `team${team}_meld_${cardRank}`
-    const meldCards = Util.arrayUnion(g.getCardNames(meldPlace), cards)
+    const meldCards = Util.arrayUnion(g.getCards(meldPlace), cards)
     if (meldCards.length >= MIN_MELD_SIZE && isValidMeld(meldCards)) {
       validMelds.push(meldPlace)
     }
@@ -379,7 +379,7 @@ async function meld(g: Game, player: string, team: string, initialMeldOptions: M
 
     // TODO this can take a very long time when we have a large number of combinations
     g.debugLog(`Player ${player} choose cards to meld (${Util.combination(n,0,maxPickCount)} combinations):`) // TODO how do we localize this?
-    cards = await g.pick(player, g.getCardNames(playerHand), [0,maxPickCount], meldCondition, meldOptions)
+    cards = await g.pick(player, g.getCards(playerHand), [0,maxPickCount], meldCondition, meldOptions)
     doMeld = cards.length > 0
 
     if (doMeld) {
@@ -416,15 +416,15 @@ async function meld(g: Game, player: string, team: string, initialMeldOptions: M
 async function discard(g: Game, player: string, team: string) {
   // TODO prohibit cancel on this pick
   g.debugLog(`Player ${player} choose a card to discard:`)
-  const cards = await g.pick(player, g.getCardNames(`${player}_hand`), 1)
+  const cards = await g.pick(player, g.getCards(`${player}_hand`), 1)
   console.assert(cards.length === 1)
 
   // TODO handle rotation of wild cards - this is a UI problem, not a rules problem
-  const discards = g.getCardNames('discard')
+  const discards = g.getCards('discard')
   const wasPackFrozen = isPackFrozen(discards)
   g.moveCards(cards, 'discard', 1)
   g.debugLog(`${player} discards "${cards[0]}" (${g.getCardCount('discard')})`)
-  if (isPackFrozen(g.getCardNames('discard')) && !wasPackFrozen) {
+  if (isPackFrozen(g.getCards('discard')) && !wasPackFrozen) {
     g.debugLog(`PACK FROZEN`)
   }
 
@@ -436,7 +436,7 @@ function getMeldScore(g: Game, player: string): number {
 
   let score = 0
   for (let rank of RANKS) {
-    const cards = g.getCardNames(`team${team}_meld_${rank}`)
+    const cards = g.getCards(`team${team}_meld_${rank}`)
     for (let c of cards) {
       score += getCardValue(c)
     }
@@ -447,7 +447,7 @@ function getMeldScore(g: Game, player: string): number {
 // will be negative
 function getHandScore(g: Game, player: string): number {
   let score = 0
-  const cards = g.getCardNames(`${player}_hand`)
+  const cards = g.getCards(`${player}_hand`)
   for (let c of cards) {
     score -= getCardValue(c)
   }
@@ -459,7 +459,7 @@ function getCanastaScore(g: Game, player: string): number {
 
   let score = 0
   for (let rank of RANKS) {
-    const cards = g.getCardNames(`team${team}_meld_${rank}`)
+    const cards = g.getCards(`team${team}_meld_${rank}`)
     if (cards.length >= MIN_CANASTA_SIZE) {
       score += hasWildCards(cards) ? 300 : 500
     }

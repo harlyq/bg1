@@ -53,7 +53,7 @@ const BGLocation = {
 
     return (
       m(className, attrs,
-        m('div', locationName),
+        m('div', `${locationName} (${vnode.attrs.cards.length})`),
         vnode.attrs.cards.slice().reverse().map((cardName, i) =>
           m(BGCard, {name: cardName, key: cardName, command: command})
         )

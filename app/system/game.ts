@@ -145,6 +145,19 @@ export class Game {
     }
   }
 
+  public async queueRender(): Promise<void> {
+    if (this.render && this.options.debug) {
+      return new Promise<void>(resolve => {
+        setTimeout(() => {
+          this.render()
+          resolve()
+        })
+      })
+    } else {
+      return Promise.resolve()
+    }
+  }
+
   // returns integer in the range (min, max]
   private randomInt(min: number, max: number): number {
     return Math.floor(this.random()*(max - min) + min)
@@ -386,7 +399,7 @@ export class Game {
     // TODO assert that card.name is unique??
     const card = {name: cardName, data: cardData}
     const location = this.data.allLocations[locationName]
-    console.assert(typeof location !== 'undefined')
+    console.assert(typeof location !== 'undefined', `location '${locationName}' does not exist`)
     this.addCardInternal(card, location, index)
     return this
   }
@@ -406,7 +419,7 @@ export class Game {
   // index -1 represents the top, 0 is the bottom
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
-  public moveCards(cardName: CardName, toName: LocationName, count: number = -1, toIndex: Index = -1): ICard[] {
+  public moveCards(cardName: CardName, toName: LocationName, count: number = -1, toIndex: Index = -1): string[] {
     const cards: ICard[] = Game.filterThingsInternal(cardName, this.data.allCards)
     const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
@@ -437,16 +450,12 @@ export class Game {
       }
     }
 
-    if (this.render && this.options.debug) {
-      this.render()
-    }
-
-    return cards
+    return cards.map(card => card.name)
   }
 
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
-  public move(fromName: LocationName, toName: LocationName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): ICard[] {
+  public move(fromName: LocationName, toName: LocationName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): string[] {
     const froms: ILocation[] = Game.filterThingsInternal(fromName, this.data.allLocations)
     const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
@@ -505,11 +514,7 @@ export class Game {
       }
     } while (count > 0)
 
-    if (this.render && this.options.debug) {
-      this.render()
-    }
-
-    return cardsMoved
+    return cardsMoved.map(card => card.name)
   }
 
   public shuffle(place: LocationName): Game {
@@ -520,6 +525,7 @@ export class Game {
       console.assert(locations.length > 0, `unable to find place - ${name}`)
       this.fisherYates(locations[0].cards)
     }
+
     return this
   }
 
@@ -532,6 +538,7 @@ export class Game {
         locations[0].cards.reverse()
       }
     }
+
     return this
   }
 
