@@ -24,6 +24,8 @@
     "css-loader": "^0.28.4",
     "style-loader": "^0.18.2",
     "tape": "^4.8.0",
+    "tsc": "^1.20150623.0",
+    "typescript": "^2.4.2",
     "webpack": "^3.4.1",
     "webpack-dev-server": "^2.6.1"
   },

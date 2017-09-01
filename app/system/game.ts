@@ -420,6 +420,10 @@ export class Game {
   // we iterate over 'to' first then 'toIndex'
   // TODO handle grids
   public moveCards(cardName: CardName, toName: LocationName, count: number = -1, toIndex: Index = -1): string[] {
+    if (count === 0) {
+      return []
+    }
+
     const cards: ICard[] = Game.filterThingsInternal(cardName, this.data.allCards)
     const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
@@ -450,12 +454,20 @@ export class Game {
       }
     }
 
+    if (this.render && this.options.debug) {
+      this.render()
+    }
+
     return cards.map(card => card.name)
   }
 
   // we iterate over 'from' then 'fromIndex' and at the same time iterate over
   // 'to' and 'toIndex'
   public move(fromName: LocationName, toName: LocationName, count: number = 1, fromIndex: Index = -1, toIndex: Index = -1): string[] {
+    if (count === 0) {
+      return []
+    }
+
     const froms: ILocation[] = Game.filterThingsInternal(fromName, this.data.allLocations)
     const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
@@ -484,9 +496,7 @@ export class Game {
     do {
       // if we try to remove and insert from within a place, then the
       // indices will not be correct (because we are changing the cards)
-      console.assert(froms[iFrom] !== tos[iTo] ||
-         ((fromIndices[iFromIndex] === 0 || fromIndices[iFromIndex] === -1) &&
-         (toIndices[iToIndex] === 0 || toIndices[iToIndex] === -1)))
+      console.assert(froms[iFrom] !== tos[iTo] || ((fromIndices[iFromIndex] === 0 || fromIndices[iFromIndex] === -1) && (toIndices[iToIndex] === 0 || toIndices[iToIndex] === -1)))
 
       // not all locations have cards
       card = this.removeCard(froms[iFrom], fromIndices[iFromIndex])
@@ -514,6 +524,10 @@ export class Game {
       }
     } while (count > 0)
 
+    if (this.render && this.options.debug) {
+      this.render()
+    }
+
     return cardsMoved.map(card => card.name)
   }
 
@@ -524,6 +538,12 @@ export class Game {
       const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `unable to find place - ${name}`)
       this.fisherYates(locations[0].cards)
+
+      this.debugLog(`shuffle ${name}`)
+    }
+
+    if (this.render && this.options.debug) {
+      this.render()
     }
 
     return this
@@ -534,9 +554,14 @@ export class Game {
 
     for (let name of locationNames) {
       const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
-      if (locations.length > 0) {
-        locations[0].cards.reverse()
-      }
+      console.assert(locations.length > 0, `reverse: unable to find place '${name}'`)
+      locations[0].cards.reverse()
+
+      this.debugLog(`reverse ${name}`)
+    }
+
+    if (this.render && this.options.debug) {
+      this.render()
     }
 
     return this
@@ -547,14 +572,35 @@ export class Game {
 
     for (let name of locationNames) {
       const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
-      if (locations.length > 0) {
-        for (let card of locations[0].cards) {
-          let dice = this.data.allCards[card] as IDice
-          if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
-            dice.value = dice.faces[this.randomInt(0, dice.faces.length)]
-          }
+      console.assert(locations.length > 0, `roll: unable to find place '${name}'`)
+      for (let card of locations[0].cards) {
+        let dice = this.data.allCards[card] as IDice
+        if (dice.faces && Array.isArray(dice.faces)) { // NOTE may match some things which are not dice
+          dice.value = dice.faces[this.randomInt(0, dice.faces.length)]
         }
       }
+      this.debugLog(`roll ${name}`)
+    }
+
+    if (this.render && this.options.debug) {
+      this.render()
+    }
+
+    return this
+  }
+
+  public sort(place: LocationName, sortFn: (a: string, b: string) => number): Game {
+    const locationNames = Array.isArray(place) ? place : [place]
+
+    for (let name of locationNames) {
+      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
+      console.assert(locations.length > 0, `sort: unable to find place - ${name}`)
+      locations[0].cards.sort(sortFn)
+      this.debugLog(`sort ${name}`)
+    }
+
+    if (this.render && this.options.debug) {
+      this.render()
     }
 
     return this
@@ -757,7 +803,7 @@ export class Game {
     const n = command.options.length
     const count = Game.parseCount(command.count, n)
 
-     // TODO think of a way to speed this up when there is no condition
+    // TODO think of a way to speed this up when there is no condition
     // if (command.condition < 0) {
     //   return Util.getRandomCombination(command.options, count[0], count[1])
     // }
