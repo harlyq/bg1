@@ -30,3 +30,27 @@
 .fade-appear.fade-appear-active {
   opacity: 1;
 }
+
+.game {
+  position: relative;
+}
+
+.card {
+  position: absolute;
+  background-color: #ff9; /* lightYellow */
+  outline: 1px solid #cc0; /* dardYellow */
+  width: 60px;
+  height: 80px;
+}
+
+.location {
+  position: absolute;
+  background-color: lightBlue;
+  outline: 1px solid Blue;
+}
+
+.player {
+  position: absolute;
+  background-color: lightGreen;
+  outline: 1px solid Green;
+}
