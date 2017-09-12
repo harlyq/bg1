@@ -216,34 +216,16 @@ export class GameSystem {
       console.assert(replayResult.choices.length === pickCommands.length)
       choices = replayResult.choices
     } else {
-      // batch commands by 'who'
-      const commandBuckets: {[who: string]: IPickCommand[]} = Util.makeBuckets(pickCommands, (command) => command.who)
-
-      // wait for responses from everyone
-      const clientPromises = []
-      for (let who in commandBuckets) {
-        // TODO should the scoreFn be on the Game object?
-        clientPromises.push(this.playerClients[who](this.g, commandBuckets[who], this.scoreFn))
-      }
-
-      // string[option][command][who]
-      let results: string[][][] = await Promise.all(clientPromises)
+      // string[option][command]
+      console.assert(pickCommands.every((c, i, cs) => c.who === cs[0].who))
+      const who = pickCommands[0].who // all commands have the same 'who'
+      choices = await this.playerClients[who](this.g, pickCommands, this.scoreFn)
       if (!this.g.isRunning) {
         return // game stopped running exit
       }
 
-      // unbatch responses into a list, matching the order of 'pickCommands'
-      for (let who in commandBuckets) {
-        const whoResults: string[][] = results.shift()
-        console.assert(whoResults.length === commandBuckets[who].length)
-        for (let i = 0; i < whoResults.length; ++i) {
-          const j = pickCommands.indexOf(commandBuckets[who][i])
-          choices[j] = whoResults[i]
-        }
-      }
-
       console.assert(choices.length === pickCommands.length)
-      this.replay.push({choices, id: pickCommands[0].id})
+      this.replay.push({choices, id: pickCommands[0].id}) // reference the first command in the batch
       this.replayIndex = this.replay.length
 
       if (this.historyFile) {

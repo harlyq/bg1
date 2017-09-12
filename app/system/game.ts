@@ -81,6 +81,7 @@ export class Game {
   registeredConditions: PickCondition[] = []
   history: string[][][] = []
   uniqueId: number = 0
+  lastPickId: number = -1
   options: {debug: boolean} = {debug: false}
   setupFn: (Game) => void
   rules: any
@@ -91,9 +92,7 @@ export class Game {
   pickFn: (commands: IPickCommand[]) => Promise<string[][]>
   render: any
   pickCommands: IPickCommand[] = []
-  pickChoices: {choicePromise: Promise<string[][]>, pendingCommands: IPickCommand[]}[] = []
-  // pickCommandsCopy: {command: IPickCommand, choice: string[]}[] = []
-  // resolvedCommands: IPickCommand[] = []
+  clientPromises: Promise<string[][]>[] = []
   choices: string[][] = []
   isRunning: boolean = false
 
@@ -633,6 +632,10 @@ export class Game {
     return str
   }
 
+  public async pickAll<TAll>(pickPromises: Iterable<TAll | PromiseLike<TAll>>): Promise<TAll[]> {
+    return await Promise.all(pickPromises)
+  }
+
   private async pickInternal(type: string, who: string, options: string[], count: PickCount, condition?: PickCondition, conditionArg?: any): Promise<string[]> {
     console.assert(typeof who !== 'undefined' && who !== '')
     console.assert(Array.isArray(options))
@@ -640,53 +643,61 @@ export class Game {
     const command = {id: this.uniqueId++, type, who, options, count, condition: this.registeredConditions.indexOf(condition), conditionArg}
     this.pickCommands.push(command)
 
-    // TODO clean this up, it is very confusing
     return new Promise<string[]>((resolve) => {
 
       // we may receive several pick requests in the same frame, these are
       // pushed onto 'pickCommands', the Promise.resolve() is used to process the
-      // commands once all of them have been received
+      // commands once all of them have been received.
+      // We place the commands into buckets, sorted by 'who', so that each call
+      // to the pickFn is for a single 'who'
       Promise.resolve().then(async () => {
-        console.assert(this.pickCommands.length > 0)
+        // batch commands by 'who'
+        const commandBuckets: {[who: string]: IPickCommand[]} = Util.makeBuckets(this.pickCommands, (command) => command.who)
+        console.assert(Object.keys(commandBuckets).length > 0)
 
-        const i = this.pickCommands.indexOf(command)
+        // build a set of promises for all 'who's that have been received
+        // in the same frame
+        const needPromise = this.lastPickId !== this.uniqueId
+        if (needPromise) {
+          // perform a separate pick request per 'who'
+          this.clientPromises = []
+          for (let who in commandBuckets) {
+            this.clientPromises.push(this.pickFn(commandBuckets[who]))
+          }
+          this.lastPickId = this.uniqueId
+        }
+
+        // Each command waits on the same set of promises, all results will
+        // be the same for a given set
+        // results => string[chosen option][command][who]
+        const results: string[][][] = await Promise.all(this.clientPromises)
+        console.assert(results.length === Object.keys(commandBuckets).length)
+
+        if (needPromise) {
+          // TODO fix this
+          //this.history.push(results)
+        }
+
+        // there is one item in results per 'who'
+        const who = command.who
+        const whoIndex = Object.keys(commandBuckets).indexOf(who)
+        console.assert(whoIndex !== -1)
+        const whoResults: string[][] = results[whoIndex]
+        console.assert(whoResults.length === commandBuckets[who].length)
+
+        // each result will have a response for each command
+        const i = commandBuckets[who].indexOf(command)
         console.assert(i !== -1)
-
-        const buildChoicePromise = typeof this.pickChoices[i] === 'undefined'
-        if (buildChoicePromise) {
-          // get all commands that don't have a choice assigned, and process them
-          // in one batch
-          const pendingCommands = this.pickCommands.filter((c, j) => typeof this.pickChoices[j] === 'undefined')
-          const choicePromise = this.pickFn(pendingCommands)
-          this.pickCommands.forEach((c, j) => {
-            if (typeof this.pickChoices[j] === 'undefined') {
-              this.pickChoices[j] = {choicePromise, pendingCommands}
-            }
-          })
-        }
-        const myPickChoice = this.pickChoices[i]
-
-        // everyone will wait on their promise (which may be shared amongst multipe commands)
-        const choices: string[][] = await myPickChoice.choicePromise
-
-        if (buildChoicePromise) {
-          this.history.push(choices)
-          console.assert(choices.length === myPickChoice.pendingCommands.length)
-        }
-
-        // extra the choice for this command
-        const j = myPickChoice.pendingCommands.indexOf(command)
-        const choice = choices[j]
-
-        // remove the command and associate choice from the lists, they've now been processed
-        // we recalculate the index, in case other async queries have removed entries
-        const myI = this.pickChoices.indexOf(myPickChoice)
-        this.pickChoices.splice(myI, 1)
-        this.pickCommands.splice(myI, 1)
-
+        const choice = whoResults[i]
         if (choice.length > 0) {
           this.debugLog(`player ${who} ${type} '${choice}' from [${options}]`)
         }
+
+        // remove processed command from pickCommands
+        const j = this.pickCommands.indexOf(command)
+        console.assert(j !== -1)
+        this.pickCommands.splice(j, 1)
+
         resolve(choice)
       })
     })

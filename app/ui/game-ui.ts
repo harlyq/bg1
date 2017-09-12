@@ -105,17 +105,6 @@ enum LocationStyle {
   FAN,
 }
 
-enum LocationXAlign {
-  LEFT,
-  RIGHT,
-  CENTER,
-  JUSTIFY, // start and end and evenly between
-  SPACE_EVENLY,
-  FROM_START,
-  FROM_END,
-  FROM_CENTER,
-}
-
 enum LocationAlign {
   START,
   END,

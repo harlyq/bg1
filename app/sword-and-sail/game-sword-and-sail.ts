@@ -248,7 +248,7 @@ async function round(g: Game, player: string): Promise<string> {
       attackUnit(g, player, actionPoints)
     ]
 
-    const costs = await Promise.all(possibleActions)
+    const costs = await g.pickAll(possibleActions) //await Promise.all(possibleActions)
     actionPoints = costs.reduce((ap, x) => ap -= x, actionPoints)
 
     // only need to check the current player for the winning conditions
@@ -478,7 +478,7 @@ function getScore(g: Game, player: string): number {
 }
 
 let playerClients = {
-  'a': GameSystem.monteCarloClient(10, 3), // Game.consoleClient(), // GameSystem.randomClient()
+  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(10, 3), // Game.consoleClient(), // GameSystem.randomClient()
   'b': GameSystem.randomClient() // Game.consoleClient()
 }
 

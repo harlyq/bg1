@@ -123,10 +123,10 @@ async function buyHouses(g: Game, allPlayers: string[]) {
       let buyResults
       if (maxMoney + existingBid > lastBid) {
         const bidChoice = g.pickCards(bidder, g.getCards(bidderMoney$), [minMoney, maxMoney])
-        buyResults = await Promise.all([passChoice, bidChoice])
+        buyResults = await g.pickAll([passChoice, bidChoice])
         console.assert(buyResults.length === 2)
       } else {
-        buyResults = await Promise.all([passChoice])
+        buyResults = await g.pickAll([passChoice])
         console.assert(buyResults.length === 1)
       }
 
@@ -164,7 +164,7 @@ async function sellHouses(g: Game, allPlayers: string[]) {
       sellChoices.push(g.pick(player, g.getCards(`${player}_houses`), 1))
     }
 
-    let sellResults = await Promise.all(sellChoices)
+    let sellResults = await g.pickAll(sellChoices)
     console.assert(sellResults.length === sellChoices.length)
     let offers = sellResults.map((result, i) => { return {player: allPlayers[i], house: result[0]} })
     offers.sort((a,b) => getHouseValue(a.house) - getHouseValue(b.house)) // lowest to highest
