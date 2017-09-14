@@ -70,6 +70,10 @@ export interface IGameState {
 }
 
 export class Game {
+  public static TOP = -1 // should be const
+  public static BOTTOM = 0 // should be const
+  public static ALL = -1 // should be const
+
   data: IGameState = {
     allCards: {},
     allLocations: {},
@@ -96,6 +100,13 @@ export class Game {
   choices: string[][] = []
   isRunning: boolean = false
 
+  // the pickFn must return an array the same size as in the commands parameter
+  // Each element of the array is either undefined or an array of choices which
+  // match the parameters of the command for that index. The length of the array
+  // indicates the number of options chosen.
+  // TODO should we simplify the pickFn to just return a list of choices? We can
+  // then do assignment to the relevant command, such that if there are two
+  // commands with the same option, then we can return that option for both
   constructor(name: string, pickFn?: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
     this.name = name
     this.pickFn = pickFn
@@ -144,7 +155,7 @@ export class Game {
     }
   }
 
-  public async queueRender(): Promise<void> {
+  public async debugRender(): Promise<void> {
     if (this.render && this.options.debug) {
       return new Promise<void>(resolve => {
         setTimeout(() => {
@@ -175,28 +186,33 @@ export class Game {
     return this.history
   }
 
-  static filterThingsInternal<T>(fn: string | string[] | ((string, any) => boolean), things: {[name: string]: T & INamed}): (T & INamed)[] {
+  static filterThingsInternal<T>(dbg: string, fn: string | string[] | ((string, any) => boolean), things: {[name: string]: T & INamed}): (T & INamed)[] {
     if (typeof fn === 'function') {
       let results: (T & INamed)[] = []
       for (let key in things) {
+        console.assert(!!things[key], `unknown ${dbg} '${key}'`)
         if (things[key] && fn(key, things[key].data)) {
           results.push(things[key])
         }
       }
       return results
     } else if (typeof fn === 'string') {
+      console.assert(!!things[fn], `unknown ${dbg} '${fn}'`)
       if (things[fn]) {
         return [things[fn]]
       }
     } else if (Array.isArray(fn)) {
       const list: string[] = fn
-      return list.map(r => things[r]).filter(x => x) // the output is the same order as the input
+      return list.map(r => {
+        console.assert(!!things[r], `unknown ${dbg} '${r}'`)
+        return things[r]
+      }).filter(x => x) // the output is the same order as the input
     }
     return []
   }
 
-  static filterThings<T>(name: string | string[] | ((INamed) => boolean), things: {[name: string]: T & INamed}): string[] {
-    const results = Game.filterThingsInternal<T>(name, things)
+  static filterThings<T>(dbg: string, name: string | string[] | ((INamed) => boolean), things: {[name: string]: T & INamed}): string[] {
+    const results = Game.filterThingsInternal<T>(dbg, name, things)
     return results.map(x => x.name)
   }
 
@@ -224,7 +240,7 @@ export class Game {
   }
 
   public filterCards(cardName: CardName): string[] {
-    return Game.filterThings(cardName, this.data.allCards)
+    return Game.filterThings('card', cardName, this.data.allCards)
   }
 
   public getCardByName(cardName: string): ICard {
@@ -240,7 +256,7 @@ export class Game {
   }
 
   public getCards(locationName: LocationName): string[] {
-    const locations: ILocation[] = Game.filterThingsInternal(locationName, this.data.allLocations)
+    const locations: ILocation[] = Game.filterThingsInternal('location', locationName, this.data.allLocations)
     let cards: string[] = []
     for (let place of locations) {
       for (let cardName of place.cards) {
@@ -251,7 +267,7 @@ export class Game {
   }
 
   public getCardCount(locationName: LocationName): number {
-    const locations: ILocation[] = Game.filterThingsInternal(locationName, this.data.allLocations)
+    const locations: ILocation[] = Game.filterThingsInternal('location', locationName, this.data.allLocations)
     let length = 0
     for (let place of locations) {
       length += place.cards.length
@@ -281,11 +297,11 @@ export class Game {
   }
 
   public filterLocations(locationName: LocationName): string[] {
-    return Game.filterThings(locationName, this.data.allLocations)
+    return Game.filterThings('location', locationName, this.data.allLocations)
   }
 
   public filterPlayers(playerName: PlayerName): string[] {
-    return Game.filterThings(playerName, this.data.allPlayers)
+    return Game.filterThings('player', playerName, this.data.allPlayers)
   }
 
   public getAllPlayers(): string[] {
@@ -423,8 +439,8 @@ export class Game {
       return []
     }
 
-    const cards: ICard[] = Game.filterThingsInternal(cardName, this.data.allCards)
-    const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
+    const cards: ICard[] = Game.filterThingsInternal('card', cardName, this.data.allCards)
+    const tos: ILocation[] = Game.filterThingsInternal('location', toName, this.data.allLocations)
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
     console.assert(cards.length > 0, `unable to find cards "${cardName}"`)
@@ -467,8 +483,8 @@ export class Game {
       return []
     }
 
-    const froms: ILocation[] = Game.filterThingsInternal(fromName, this.data.allLocations)
-    const tos: ILocation[] = Game.filterThingsInternal(toName, this.data.allLocations)
+    const froms: ILocation[] = Game.filterThingsInternal('location', fromName, this.data.allLocations)
+    const tos: ILocation[] = Game.filterThingsInternal('location', toName, this.data.allLocations)
     const fromIndices: number[] = Array.isArray(fromIndex) ? fromIndex : [fromIndex]
     const toIndices: number[] = Array.isArray(toIndex) ? toIndex : [toIndex]
 
@@ -534,7 +550,7 @@ export class Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
+      const locations = Game.filterThingsInternal('location', name, this.data.allLocations) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `unable to find place - ${name}`)
       this.fisherYates(locations[0].cards)
 
@@ -548,11 +564,26 @@ export class Game {
     return this
   }
 
+  public swap(fromName: LocationName, toName: LocationName): Game {
+    let fromCards = this.getCards(fromName)
+    let toCards = this.getCards(toName)
+
+    if (fromCards.length > 0) {
+      this.moveCards(fromCards, toName, -1)
+    }
+
+    if (toCards.length > 0) {
+      this.moveCards(toCards, fromName, -1)
+    }
+
+    return this
+  }
+
   public reverse(place: LocationName): Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
+      const locations = Game.filterThingsInternal('location', name, this.data.allLocations) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `reverse: unable to find place '${name}'`)
       locations[0].cards.reverse()
 
@@ -570,7 +601,7 @@ export class Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
+      const locations = Game.filterThingsInternal('location', name, this.data.allLocations) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `roll: unable to find place '${name}'`)
       for (let card of locations[0].cards) {
         let dice = this.data.allCards[card] as IDice
@@ -592,7 +623,7 @@ export class Game {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
-      const locations = Game.filterThingsInternal(name, this.data.allLocations) // should only have 0 or 1 entries
+      const locations = Game.filterThingsInternal('location', name, this.data.allLocations) // should only have 0 or 1 entries
       console.assert(locations.length > 0, `sort: unable to find place - ${name}`)
       locations[0].cards.sort(sortFn)
       this.debugLog(`sort ${name}`)
@@ -618,7 +649,7 @@ export class Game {
     return str
   }
 
-  public getCardPlacements(): string {
+  public toStringSimple(): string {
     let str = ''
     for (let locationName in this.data.allLocations) {
       const place = this.data.allLocations[locationName]
@@ -632,7 +663,7 @@ export class Game {
     return str
   }
 
-  public async pickAll<TAll>(pickPromises: Iterable<TAll | PromiseLike<TAll>>): Promise<TAll[]> {
+  public async pickGroup<TAll>(pickPromises: Iterable<TAll | PromiseLike<TAll>>): Promise<TAll[]> {
     return await Promise.all(pickPromises)
   }
 
@@ -689,7 +720,7 @@ export class Game {
         const i = commandBuckets[who].indexOf(command)
         console.assert(i !== -1)
         const choice = whoResults[i]
-        if (choice.length > 0) {
+        if (typeof choice !== 'undefined') {
           this.debugLog(`player ${who} ${type} '${choice}' from [${options}]`)
         }
 
@@ -766,119 +797,27 @@ export class Game {
     return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
   }
 
-  // public static consoleClient() {
-  //   return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[][] {
-  //     const count = Game.parseCount(command.count, command.options.length)
-  //     const conditionFn = command.condition >= 0 ? g.registeredConditions[command.condition] : null
-  //
-  //     console.log(g.toString())
-  //     if (count[0] === count[1]) {
-  //       console.log(`Select ${count[0]} choice`)
-  //     } else {
-  //       console.log(`Select between ${count[0]} and ${count[1]} choices`)
-  //     }
-  //
-  //     let choices = []
-  //     let hasValidChoice = false
-  //
-  //     while (!hasValidChoice) {
-  //       let options = command.options.slice()
-  //       choices = []
-  //
-  //       while (choices.length < count[1]) {
-  //         let selected = ReadlineSync.keyInSelect(options, 'Which option? ', {cancel: (count[0] === 0) ? 'CANCEL' : false})
-  //         if (selected !== -1) {
-  //           choices.push(options[selected])
-  //           options.splice(selected, 1)
-  //         } else if (choices.length >= count[0]) {
-  //           break
-  //         }
-  //       }
-  //
-  //       // cancelled
-  //       if (choices.length === 0) {
-  //         return []
-  //       }
-  //
-  //       hasValidChoice = !conditionFn || conditionFn(g, command.who, choices, command.conditionArg)
-  //       if (!hasValidChoice) {
-  //         console.log(`choice ${choices} is invalid`)
-  //       }
-  //     }
-  //
-  //     return choices
-  //   }
-  // }
+  // returns the players ranked from top to bottom. Note, some players may be
+  // ranked equally
+  public rankPlayers(scoreFn: (g: Game, player: string) => number | number[]): string[] {
+    const allPlayers = this.getAllPlayers()
+    const scores = allPlayers.map(player => scoreFn(this, player))
+    let sortedScores = scores.slice().sort(Array.isArray(scores[0]) ? Game.compareScoreArray : Game.compareScore)
+    return scores.map(score => allPlayers[sortedScores.indexOf(score)])
+  }
 
-  private static getValidCombinations(g: Game, command: IPickCommand): string[][] {
-    const n = command.options.length
-    const count = Game.parseCount(command.count, n)
-
-    // TODO think of a way to speed this up when there is no condition
-    // if (command.condition < 0) {
-    //   return Util.getRandomCombination(command.options, count[0], count[1])
-    // }
-
-    let conditionFn
-    if (command.condition >= 0) {
-      conditionFn = function(list: string[]) {
-        return g.registeredConditions[command.condition](g, command.who, list, command.conditionArg)
-      }
+  // sort an array of numbers, highest to lowest
+  private static compareScoreArray(a: number[], b: number[]): number {
+    console.assert(a.length === b.length)
+    let compare = 0
+    for (let i = 0; i < a.length && compare === 0; ++i) {
+      compare = b[i] - a[i]
     }
-
-    let combinations = Util.getCombinations(command.options, count[0], count[1], conditionFn)
-
-    return combinations
+    return compare
   }
 
-  public static historyClient(history: string[][]): any {
-    return function(g: Game, command: IPickCommand, scoreFn: (Game, string) => number): string[] {
-      console.log(g.toString())
-      if (history.length === 0) {
-        console.log('history completed')
-        Util.quit()
-      }
-      return history.shift()
-    }
+  // sort numbers highest to lowest
+  private static compareScore(a: number, b: number): number {
+    return b - a
   }
-
-  private static findAverageScore(scores: {optionIndex: number, score: number}[]): number {
-    let scoreTotal = scores.reduce((t,x) => t + x.score, 0)
-    return scoreTotal/scores.length
-  }
-
-  private static findBestScore(scores: {optionIndex: number, score: number}[]): number {
-    return scores.reduce((m, x) => Math.max(m, x.score), scores[0].score)
-  }
-
-  private static getRelativeScore(g: Game, player: string, scoreFn: (Game, string) => number): number {
-    // find our score relative to the best opponent score
-    let relativeScore = scoreFn(g, player)
-
-    const opponents = g.playerChain.toArray([player])
-    if (opponents.length > 0) {
-      let bestScore = scoreFn(g, opponents[0])
-      for (let i = 1; i < opponents.length; ++i) {
-        bestScore = Math.max(bestScore, scoreFn(g, opponents[i]))
-      }
-      relativeScore -= bestScore
-    }
-
-    return relativeScore
-  }
-
-  public validateData() {
-    for (let cardName in this.data.allCards) {
-      let found = ''
-      for (let locationName in this.data.allLocations) {
-        const place = this.data.allLocations[locationName]
-        const i = place.cards.indexOf(cardName)
-        if (i !== -1) {
-          console.assert(found === '')
-          found = locationName
-        }
-      }
-    }
-  }
-
 }

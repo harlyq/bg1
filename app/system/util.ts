@@ -139,7 +139,7 @@ export default class Util {
 
   // returns the first highest index
   public static maxIndex<T>(list: T[]): number {
-    let n = list.length
+    const n = list.length
     if (n === 0) {
       return -1
     }
@@ -156,7 +156,7 @@ export default class Util {
 
   // returns the index with the highest value, or multiple indices if there is a tie
   public static maxIndices<T>(list: T[]): number[] {
-    let n = list.length
+    const n = list.length
     if (n === 0) {
       return [-1]
     }
@@ -174,8 +174,21 @@ export default class Util {
         indices.push(i)
       }
     }
-    
+
     return indices
+  }
+
+  // returns the indices sorted from highest to lower
+  public static sortIndices<T>(list: T[], compareFn: (a,b) => number = ((a,b) => a - b)): number[] {
+    const n = list.length
+    if (n === 0) {
+      return []
+    }
+
+    const sortedCopy = list.slice()
+    sortedCopy.sort(compareFn)
+
+    return list.map(x => sortedCopy.indexOf(x))
   }
 
   public static swapElements<T>(list: T[], i: number, j: number): T[] {
@@ -212,6 +225,14 @@ export default class Util {
 
   public static randomValue<T>(list: T[]): T {
     return list[Util.randomInt(0, list.length)]
+  }
+
+  public static removeValue<T>(list: T[], val: T): T[] {
+    const i = list.indexOf(val)
+    if (i !== -1) {
+      list.splice(i, 1)
+    }
+    return list
   }
 
   public static fisherYates<T>(list: T[]): T[] {
@@ -284,19 +305,5 @@ export default class Util {
       }
       return dest
     }
-  }
-
-  // takes items in lists of lists and places them into a list
-  // only flattens the first level
-  public static flatten(list: any[][]): any[] {
-    let result = []
-    for (let item in list) {
-      if (Array.isArray(item)) {
-        result.concat(item)
-      } else {
-        result.push(item)
-      }
-    }
-    return result
   }
 }

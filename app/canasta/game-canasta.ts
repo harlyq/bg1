@@ -82,7 +82,7 @@ async function rules(g: Game) {
     gameOver = await turn(g, player)
     if (!gameOver) {
       player = g.playerChain.next(player)
-      await g.queueRender()
+      await g.debugRender()
     }
   }
 

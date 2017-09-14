@@ -123,14 +123,12 @@ async function buyHouses(g: Game, allPlayers: string[]) {
       let buyResults
       if (maxMoney + existingBid > lastBid) {
         const bidChoice = g.pickCards(bidder, g.getCards(bidderMoney$), [minMoney, maxMoney])
-        buyResults = await g.pickAll([passChoice, bidChoice])
-        console.assert(buyResults.length === 2)
+        buyResults = await g.pickGroup([passChoice, bidChoice])
       } else {
-        buyResults = await g.pickAll([passChoice])
-        console.assert(buyResults.length === 1)
+        buyResults = await g.pickGroup([passChoice])
       }
 
-      if (buyResults[0].length > 0 && buyResults[0][0] === 'pass') {
+      if (buyResults[0] && buyResults[0][0] === 'pass') {
         let existingBidRoundedDown = Math.floor(existingBid/2)
         g.move(bidderBid$, 'bank', existingBid - existingBidRoundedDown)
         g.move(bidderBid$, bidderMoney$, existingBidRoundedDown)
@@ -138,7 +136,7 @@ async function buyHouses(g: Game, allPlayers: string[]) {
         g.move('market', `${bidder}_houses`, 1, 0) // take the lowest value house
         bidders.remove(bidder)
       } else {
-        console.assert(buyResults[1].length > 0)
+        console.assert(buyResults[1])
         g.moveCards(buyResults[1], bidderBid$, -1)
         lastBid = g.getCardCount(bidderBid$)
       }
@@ -164,7 +162,7 @@ async function sellHouses(g: Game, allPlayers: string[]) {
       sellChoices.push(g.pick(player, g.getCards(`${player}_houses`), 1))
     }
 
-    let sellResults = await g.pickAll(sellChoices)
+    let sellResults = await g.pickGroup(sellChoices)
     console.assert(sellResults.length === sellChoices.length)
     let offers = sellResults.map((result, i) => { return {player: allPlayers[i], house: result[0]} })
     offers.sort((a,b) => getHouseValue(a.house) - getHouseValue(b.house)) // lowest to highest

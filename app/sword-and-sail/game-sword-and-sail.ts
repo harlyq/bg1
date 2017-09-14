@@ -221,9 +221,9 @@ async function rules(g: Game) {
     // TODO disable the laogging during a Seek
     g.debugLog(`PLAYER ${player}`)
     winner = await round(g, player)
-    g.debugLog(g.getCardPlacements())
+    g.debugLog(g.toStringSimple())
 
-    await g.queueRender()
+    await g.debugRender()
     player = g.playerChain.next(player)
   }
 
@@ -248,7 +248,7 @@ async function round(g: Game, player: string): Promise<string> {
       attackUnit(g, player, actionPoints)
     ]
 
-    const costs = await g.pickAll(possibleActions) //await Promise.all(possibleActions)
+    const costs = await g.pickGroup(possibleActions) //await Promise.all(possibleActions)
     actionPoints = costs.reduce((ap, x) => ap -= x, actionPoints)
 
     // only need to check the current player for the winning conditions

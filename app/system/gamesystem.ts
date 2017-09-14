@@ -234,16 +234,19 @@ export class GameSystem {
     }
 
     console.assert(choices.length === pickCommands.length)
+    let numValidChoices = 0
     for (let i = 0; i < pickCommands.length; ++i) {
-      this.validateChoice(pickCommands[i], choices[i])
+      if (typeof choices[i] !== 'undefined') {
+        this.validateChoice(pickCommands[i], choices[i])
+        ++numValidChoices
+      }
     }
+    console.assert(numValidChoices > 0)
 
     return choices
   }
 
   private validateChoice(command: IPickCommand, result: string[]) {
-    //console.assert(!(result instanceof IterableIterator<{}>), 'missing "yield*" before a call to another function')
-
     console.assert(Array.isArray(result), 'result is not an array')
 
     for (let i = 0; i < result.length; ++i) {
@@ -260,8 +263,8 @@ export class GameSystem {
     // TODO recursively validate the options (as they may be further commands)
   }
 
-  // If there are multiple commands sent in the same frame, then process them
-  // as parallel commands
+  // If there are multiple commands sent in the same frame, then chose one of
+  // them
   // TODO ensure we return one command pre owner
   public static randomClient() {
     let chosenIndex: number
@@ -269,7 +272,7 @@ export class GameSystem {
     return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number): Promise<string[][]> => {
       const randomIndex = Util.randomInt(0, commands.length)
       const choices: string[][] = commands.map((command, i) => {
-        let choice: string[] = []
+        let choice: string[]
         if (i === randomIndex) {
           let combinations = GameSystem.getValidCombinationsForCommand(g, command)
           if (combinations.length > 0) {

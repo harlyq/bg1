@@ -11,6 +11,7 @@ module.exports = {
     'game-mancala': `${PATHS.dist}/mancala/game-mancala.js`,
     'game-sword-and-sail': `${PATHS.dist}/sword-and-sail/game-sword-and-sail.js`,
     'game-for-sale': `${PATHS.dist}/for-sale/game-for-sale.js`,
+    'game-citadels': `${PATHS.dist}/citadels/game-citadels.js`,
     'test-ui': `${PATHS.dist}/ui/test/test-ui.js`,
     'ui-for-sale': `${PATHS.dist}/for-sale/ui-for-sale.js`, // HACK
   },
