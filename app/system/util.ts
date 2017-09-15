@@ -185,7 +185,7 @@ export default class Util {
       return []
     }
 
-    const sortedCopy = list.slice()
+    let sortedCopy = list.slice()
     sortedCopy.sort(compareFn)
 
     return list.map(x => sortedCopy.indexOf(x))
@@ -218,6 +218,17 @@ export default class Util {
     return union
   }
 
+  public static arraySubtraction<T>(a: T[], b: T[]): T[] {
+    let difference = []
+    for (let val of a) {
+      if (b.indexOf(val) === -1) {
+        difference.push(val)
+      }
+    }
+    return difference
+  }
+
+  // Don't use these inside the rules
   // returns integer in the range (min, max]
   public static randomInt(min: number, max: number): number {
     return Math.floor(Math.random()*(max - min) + min)
@@ -225,14 +236,6 @@ export default class Util {
 
   public static randomValue<T>(list: T[]): T {
     return list[Util.randomInt(0, list.length)]
-  }
-
-  public static removeValue<T>(list: T[], val: T): T[] {
-    const i = list.indexOf(val)
-    if (i !== -1) {
-      list.splice(i, 1)
-    }
-    return list
   }
 
   public static fisherYates<T>(list: T[]): T[] {

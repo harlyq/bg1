@@ -5,6 +5,7 @@ import {Chain} from './chain'
 import * as seedrandom from 'seedrandom'
 //let fs = require('fs');
 
+
 export interface IPlayer {
   name: string
   data?: any
@@ -173,6 +174,10 @@ export class Game {
     return Math.floor(this.random()*(max - min) + min)
   }
 
+  public randomValue<T>(list: T[]): T {
+    return list[this.randomInt(0, list.length)]
+  }
+
   private fisherYates<T>(list: T[]): T[] {
     let n = list.length
     for (var i = 0; i < n - 1; ++i) {
@@ -216,6 +221,7 @@ export class Game {
     return results.map(x => x.name)
   }
 
+  // TODO is Value still needed, or do we just put the properties on the class directly?
   public setValue(name: string, value: any) {
     this.data.allValues[name] = value
   }
@@ -243,24 +249,24 @@ export class Game {
     return Game.filterThings('card', cardName, this.data.allCards)
   }
 
-  public getCardByName(cardName: string): ICard {
-    return this.data.allCards[cardName]
-  }
-
-  public getLocationByName(locationName: string): ILocation {
-    return this.data.allLocations[locationName]
-  }
-
-  public getPlayerByName(playerName: string): IPlayer {
-    return this.data.allPlayers[playerName]
-  }
-
   public getCards(locationName: LocationName): string[] {
     const locations: ILocation[] = Game.filterThingsInternal('location', locationName, this.data.allLocations)
     let cards: string[] = []
     for (let place of locations) {
       for (let cardName of place.cards) {
         cards.push(cardName)
+      }
+    }
+    return cards
+  }
+
+  public getCardsByWho(locationName: LocationName, who: string): string[] {
+    const locations: ILocation[] = Game.filterThingsInternal('location', locationName, this.data.allLocations)
+    let cards: string[] = []
+    for (let place of locations) {
+      const faceUp = (who === 'DEBUG') || (place.data && Array.isArray(place.data.faceUp) && place.data.faceUp.indexOf(who) !== -1)
+      for (let cardName of place.cards) {
+        cards.push(faceUp ? cardName : '?')
       }
     }
     return cards
@@ -277,22 +283,46 @@ export class Game {
 
   public getCardData(cardName: string): any {
     const card = this.data.allCards[cardName]
-    if (card) {
-      return card.data
+    console.assert(typeof card !== 'undefined', `unable to find card '${cardName}'`)
+    return card.data
+  }
+
+  public mergeCardData(cardName: string, data: any): any {
+    const card = this.data.allCards[cardName]
+    console.assert(typeof card !== 'undefined', `unable to find card '${cardName}'`)
+    card.data = card.data || {}
+    for (let key in data) {
+      card.data[key] = data[key]
     }
   }
 
   public getLocationData(locationName: string): any {
     const location = this.data.allLocations[locationName]
-    if (location) {
-      return location.data
+    console.assert(typeof location !== 'undefined', `unable to find location '${locationName}'`)
+    return location.data
+  }
+
+  public mergeLocationData(locationName: string, data: any) {
+    const location: ILocation = this.data.allLocations[locationName]
+    console.assert(typeof location !== 'undefined', `unable to find location '${locationName}'`)
+    location.data = location.data || {}
+    for (let key in data) {
+      location.data[key] = data[key]
     }
   }
 
   public getPlayerData(playerName: string): any {
-    const player = this.data.allLocations[playerName]
-    if (player) {
-      return player.data
+    const player: IPlayer = this.data.allLocations[playerName]
+    console.assert(typeof player !== 'undefined', `unable to find player '${playerName}'`)
+    return player.data
+  }
+
+  public mergePlayerData(playerName: string, data: any) {
+    const player: IPlayer = this.data.allLocations[playerName]
+    console.assert(typeof player !== 'undefined', `unable to find player '${playerName}'`)
+    player.data = player.data || {}
+    for (let key in data) {
+      player.data[key] = data[key]
     }
   }
 
@@ -368,7 +398,7 @@ export class Game {
       cardName = from.cards.splice(index, 1)[0]
     }
     console.assert(cardName.length > 0)
-    let card = this.getCardByName(cardName)
+    let card = this.data.allCards[cardName]
     return card
   }
 
@@ -642,7 +672,7 @@ export class Game {
     for (let locationName in this.data.allLocations) {
       const place = this.data.allLocations[locationName]
       str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
-        const card = this.getCardByName(c)
+        const card = this.data.allCards[c]
         return c + (card.value ? `[${card.value.toString()}]` : '')
       }).join(',')}\n`
     }
@@ -655,7 +685,7 @@ export class Game {
       const place = this.data.allLocations[locationName]
       if (place.cards.length > 0) {
         str += `${place.name} (${place.cards.length}) = ${place.cards.map(c => {
-          const card = this.getCardByName(c)
+          const card = this.data.allCards[c]
           return c + (card.value ? `[${card.value.toString()}]` : '')
         }).join(',')}\n`
       }

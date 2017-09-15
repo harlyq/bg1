@@ -32,13 +32,13 @@ function setup(g: Citadels) {
   g.addLocation('discard')
   g.addLocation('district')
   g.addLocation('chooseDistrict') // temp place for pick x from n distrcts
-  g.addLocation('bank')
+  g.addLocation('bank', {faceUp: allPlayers})
 
   for (let player of allPlayers) {
-    g.addLocation('money_'+player)
-    g.addLocation('district_'+player)
-    g.addLocation('hand_'+player)
-    g.addLocation('character_'+player)
+    g.addLocation('money_'+player, {faceUp: allPlayers})
+    g.addLocation('district_'+player, {faceUp: [player]})
+    g.addLocation('hand_'+player, {faceUp: [player]})
+    g.addLocation('character_'+player, {faceUp: [player]})
   }
 
   g.characters = ['Assassin', 'Thief', 'Magician', 'King', 'Bishop', 'Merchant', 'Architect', 'Warlord']
@@ -110,7 +110,7 @@ async function rules(g: Citadels) {
   const allPlayers = g.getAllPlayers()
   const playerChain = new Chain(allPlayers)
   let lastRound = false
-  g.crowned = Util.randomValue(allPlayers)
+  g.crowned = g.randomValue(allPlayers)
 
   g.shuffle('district')
 
@@ -137,17 +137,18 @@ async function chooseCharacters(g: Citadels) {
   g.moveCards(g.characters, 'character', Game.ALL)
   g.shuffle('character')
   g.moveCards(['King'], 'character', 1, Game.BOTTOM) // king must never be at the top of the character deck
-  // TODO add faceup and 2-3 player rules g.move('character', 'discard', 1) // faceup
+  // TODO add faceup and 2-3 player rules g.move('character', 'discard', 1)
   g.move('character', 'discard', g.getCardCount('character') - numPlayers - 1) // facedown
 
   let player = g.crowned
   for (let i = 0; i < numPlayers; ++i) {
+    g.mergeLocationData('character', {faceUp: [player]})
     const roles = await g.pickCards(player, g.getCards('character'), 1) // faceup during the pick
     g.moveCards(roles, 'character_'+player, 1)
     player = playerChain.next(player)
   }
   console.assert(g.getCardCount('character') === 1)
-  g.move('character', 'discard', Game.ALL) // facedown
+  g.move('character', 'discard', Game.ALL)
 
   g.robbed = ''
   g.thief = ''
@@ -166,6 +167,7 @@ async function round(g: Citadels, player: string) {
       }
     }
   }
+  await g.debugRender() // HACK
 }
 
 async function turn(g: Citadels, character: string, player: string) {
@@ -173,6 +175,9 @@ async function turn(g: Citadels, character: string, player: string) {
     console.assert(g.thief !== '')
     g.move('money_'+g.robbed, 'money_'+g.thief, Game.ALL)
   }
+
+  await assassinate(g, character, player)
+  await rob(g, character, player)
 
   if (character === 'King') {
     g.crowned = player
@@ -232,6 +237,7 @@ async function drawCards(g: Citadels, player: string): Promise<boolean> {
   let actionComplete = false
   let results = await g.pickLocations(player, ['district'], 1)
   if (results) {
+    g.mergeLocationData('chooseDistrict', {faceUp: [player]})
     let topCards = g.move('district', 'chooseDistrict', 2)
     let pickedCards = await g.pickCards(player, topCards, 1) // faceUp
     if (pickedCards) {
@@ -265,12 +271,40 @@ async function buildDistricts(g: Citadels, character: string, player: string): P
     let builds = await g.pickCards(player, buildOptions, [0, buildLimit], buildCondition)
     if (builds) {
       if (builds.length > 0) {
+        const totalBuildCost = builds.reduce((sum, x) => sum + getDistrictCost(g, x), 0)
         g.moveCards(builds, 'district_'+player, Game.ALL)
+        g.move('money_'+player, 'bank', totalBuildCost)
       }
       actionComplete = true
     }
   } else {
     actionComplete = true
+  }
+
+  return actionComplete
+}
+
+async function assassinate(g: Citadels, character: string, player: string): Promise<boolean> {
+  let actionComplete = false
+  if (character === 'Assassin' && !g.assassinated) {
+    let targets = await g.pickPlayers(player, Util.arraySubtraction(g.characters, ['Assassin']), 1)
+    if (targets) {
+      g.assassinated = targets[0]
+      actionComplete = true
+    }
+  }
+
+  return actionComplete
+}
+
+async function rob(g: Citadels, character: string, player: string): Promise<boolean> {
+  let actionComplete = false
+  if (character === 'Thief' && !g.robbed) {
+    let targets = await g.pickPlayers(player, Util.arraySubtraction(g.characters, ['Assassin', 'Thief']), 1)
+    if (targets) {
+      g.robbed = targets[0]
+      actionComplete = true
+    }
   }
 
   return actionComplete
@@ -283,7 +317,7 @@ async function magicianSwap(g: Citadels, character: string, player: string): Pro
   if (character === 'Magician' && !g.tricked) {
     let results = await g.pickLocations(player, ['character_'+player], 1)
     if (results) {
-      let opponents = Util.removeValue(g.getAllPlayers(), player)
+      let opponents = Util.arraySubtraction(g.getAllPlayers(), [player])
       let targets = await g.pickPlayers(player, opponents, 1)
       if (targets) {
         g.tricked = targets[0]

@@ -83,18 +83,37 @@ export const BGHistory = {
   }
 }
 
+export const BGPlayer = {
+  view: (vnode) => {
+    const player = vnode.attrs.name
+    const gamesystem: GameSystem = vnode.attrs.gamesystem
+    const isSelected = gamesystem.getViewer() == player
+    return [
+      m('input[type="radio"]', {value: player, checked: isSelected, onclick: () => gamesystem.setViewer(player)}),
+      player
+    ]
+  }
+}
+
 export const BGGame = {
   view: (vnode) => {
     const gamesystem: GameSystem = vnode.attrs.gamesystem
     const command: IPickCommand = vnode.attrs.command
     const pickCallback = vnode.attrs.callback
+    const who = gamesystem.getViewer()
+    const g = gamesystem.g
     return (
       m('.bg-game',
         m(BGHistory, {gamesystem: gamesystem}),
         pickCallback ? m('button', {onclick: () => { pickCallback(selection); selection = [] }}, 'Commit') : m('div', 'AI playing'),
-        Object.keys(gamesystem.g.data.allLocations).map(locationName => {
-          const place = gamesystem.g.data.allLocations[locationName]
-          return m(BGLocation, {name: place.name, cards: place.cards, command: command, key: place.name})
+        m('', {},
+          Object.keys(g.data.allPlayers).map(playerName => {
+            return m(BGPlayer, {gamesystem: gamesystem, name: playerName})
+          }),
+          m(BGPlayer, {gamesystem: gamesystem, name: 'DEBUG'}),
+        ),
+        Object.keys(g.data.allLocations).map(locationName => {
+          return m(BGLocation, {name: locationName, cards: g.getCardsByWho(locationName, who), command: command, key: locationName})
         }),
       )
     )

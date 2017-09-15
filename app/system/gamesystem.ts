@@ -30,6 +30,7 @@ export class GameSystem {
   pendingCommands: any[] = []
   render: any
   resolveSeek: any
+  viewer: string = 'DEBUG'
 
   constructor(setup: SetupFn, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), replay: any[] = []) {
     this.setup = setup
@@ -440,6 +441,16 @@ export class GameSystem {
     return relativeScore
   }
 
+  public getViewer(): string {
+    return this.viewer
+  }
+
+  public setViewer(who: string) {
+    this.viewer = who
+    if (this.render) {
+      this.render()
+    }
+  }
 }
 
 export class TrialSystem {
@@ -484,4 +495,5 @@ export class TrialSystem {
       }
     })
   }
+
 }
