@@ -303,6 +303,7 @@ async function rob(g: Citadels, character: string, player: string): Promise<bool
     let targets = await g.pickPlayers(player, Util.arraySubtraction(g.characters, ['Assassin', 'Thief']), 1)
     if (targets) {
       g.robbed = targets[0]
+      g.thief = player
       actionComplete = true
     }
   }

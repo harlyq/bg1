@@ -30,7 +30,7 @@ export class GameSystem {
   pendingCommands: any[] = []
   render: any
   resolveSeek: any
-  viewer: string = 'DEBUG'
+  viewer: string = ''
 
   constructor(setup: SetupFn, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), replay: any[] = []) {
     this.setup = setup
@@ -179,8 +179,8 @@ export class GameSystem {
     }
   }
 
-  private asyncUpdate(pickCommands: IPickCommand[]): Promise<string[][]> {
-    return new Promise<string[][]>((resolve) => {
+  private asyncUpdate(pickCommands: IPickCommand[]): Promise<string[]> {
+    return new Promise<string[]>((resolve) => {
       if (!this.g.isRunning) {
         return // game stopped running exit
       }
@@ -202,19 +202,18 @@ export class GameSystem {
     })
   }
 
-  private async asyncTick(pickCommands: IPickCommand[]) {
+  private async asyncTick(pickCommands: IPickCommand[]): Promise<string[]> {
     if (!this.g.isRunning) {
       return // game stopped running exit
     }
 
     console.assert(pickCommands.length > 0)
-    let choices: string[][] = []
+    let choices: string[] = []
 
     if (this.replayIndex < this.replay.length) {
       // get the choice from the replay
       let replayResult = this.replay[this.replayIndex++]
       console.assert(replayResult.id === pickCommands[0].id)
-      console.assert(replayResult.choices.length === pickCommands.length)
       choices = replayResult.choices
     } else {
       // string[option][command]
@@ -225,7 +224,6 @@ export class GameSystem {
         return // game stopped running exit
       }
 
-      console.assert(choices.length === pickCommands.length)
       this.replay.push({choices, id: pickCommands[0].id}) // reference the first command in the batch
       this.replayIndex = this.replay.length
 
@@ -234,55 +232,22 @@ export class GameSystem {
       }
     }
 
-    console.assert(choices.length === pickCommands.length)
-    let numValidChoices = 0
-    for (let i = 0; i < pickCommands.length; ++i) {
-      if (typeof choices[i] !== 'undefined') {
-        this.validateChoice(pickCommands[i], choices[i])
-        ++numValidChoices
-      }
-    }
-    console.assert(numValidChoices > 0)
+    console.assert(pickCommands.some(command => this.g.isValidResult(command, choices)))
 
     return choices
   }
 
-  private validateChoice(command: IPickCommand, result: string[]) {
-    console.assert(Array.isArray(result), 'result is not an array')
-
-    for (let i = 0; i < result.length; ++i) {
-      // this may be due to global variables for not using the Game.random() functions
-      console.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
-    }
-
-    if (result.length > 0 && command.condition >= 0) {
-      const conditionFn = this.g.registeredConditions[command.condition]
-      console.assert(conditionFn(this.g, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
-    }
-
-    // TODO validate the number of results against the count
-    // TODO recursively validate the options (as they may be further commands)
-  }
-
-  // If there are multiple commands sent in the same frame, then chose one of
-  // them
-  // TODO ensure we return one command pre owner
   public static randomClient() {
     let chosenIndex: number
 
-    return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number): Promise<string[][]> => {
-      const randomIndex = Util.randomInt(0, commands.length)
-      const choices: string[][] = commands.map((command, i) => {
-        let choice: string[]
-        if (i === randomIndex) {
-          let combinations = GameSystem.getValidCombinationsForCommand(g, command)
-          if (combinations.length > 0) {
-            const randomChoice = Util.randomInt(0, combinations.length)
-            choice = combinations[randomChoice]
-          }
-        }
-        return choice
-      })
+    return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number): Promise<string[]> => {
+      const commandIndex = Util.randomInt(0, commands.length)
+      let choices: string[]
+      let combinations = GameSystem.getValidCombinationsForCommand(g, commands[commandIndex])
+      if (combinations.length > 0) {
+        const randomChoice = Util.randomInt(0, combinations.length)
+        choices = combinations[randomChoice]
+      }
       return choices
     }
   }
@@ -290,13 +255,7 @@ export class GameSystem {
   // TODO depth may be better as a number of rounds, rather than a number of questions
   public static monteCarloClient(depth: number, iterations: number): any {
 
-    // TODO parallel commands need to be considered as the the one layer of
-    // the monte carlo choice.  But what if there are multiple players on these
-    // randoms e.g. a secret vote by all players, maybe using the parallel as
-    // additional combinations is better, but the response will need to be per player
-    // Thus, if player 1 has 3 choices, then we have 3 combinations, but if 4
-    // players each have 2 choices then we have 4^2 (= 16) combinations
-    return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number, parallelCommands: IPickCommand[]): Promise<string[][]> => {
+    return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number, parallelCommands: IPickCommand[]): Promise<string[]> => {
       // this pick combination list will be used at the beginning of all trials
       let pickCombinations = GameSystem.getValidCombinations(g, commands)
       const m = pickCombinations.length
@@ -308,6 +267,8 @@ export class GameSystem {
       }
 
       let totals = Array(m).fill(0)
+      let who = commands[0].who
+      console.assert(commands.every(command => command.who === commands[0].who))
 
       // multiply by m to ensure we try each pickCombination the same number
       // of times
@@ -320,9 +281,9 @@ export class GameSystem {
         let step = 0
 
         const trialName = `Trial${k}`
-        let trialSystem = new TrialSystem(trialName, g.setupFn, g.rules, g.getAllPlayers(), g.seed, g.getHistory())
+        let trialSystem = new TrialSystem(trialName, g.setupFn, g.rules, g.getAllPlayers(), g.seed, g.getHistory(who))
 
-        await trialSystem.run((trial: Game, commands: IPickCommand[]): string[][] => {
+        await trialSystem.run((trial: Game, commands: IPickCommand[]): string[] => {
           if (step >= depth) {
             trialSystem.stop()
             //return []
@@ -338,11 +299,7 @@ export class GameSystem {
               choice = combinations[randomIndex]
             }
           }
-
-          console.assert(choice.length === commands.length)
-          for (let i = 0; i < commands.length; ++i) {
-            trial.validateResult(commands[i], choice[i])
-          }
+          console.assert(commands.some(command => trial.isValidResult(command, choice)))
 
           debugCandidates.push(choice)
           step++
@@ -387,17 +344,15 @@ export class GameSystem {
     return [Util.clamp(min, countMin, countMax), Util.clamp(max, countMin, countMax)]
   }
 
-  private static getValidCombinations(g: Game, commands: IPickCommand[]): string[][][] {
+  private static getValidCombinations(g: Game, commands: IPickCommand[]): string[][] {
     let allCombinations = []
-    const emptyCombinations = Array(commands.length).fill([])
 
     for (let i = 0; i < commands.length; ++i) {
       const command = commands[i]
       const combinations = GameSystem.getValidCombinationsForCommand(g, command)
+      // TODO should only push unique combinations
       for (let combo of combinations) {
-        let response = emptyCombinations.slice()
-        response[i] = combo
-        allCombinations.push(response)
+        allCombinations.push(combo)
       }
     }
 
@@ -456,12 +411,12 @@ export class GameSystem {
 export class TrialSystem {
   trial: any
   rules: any
-  replay: string[][][] = []
+  replay: string[][] = []
   replayIndex: number = 0
   stopTrial: any
-  trialFn: (g: Game, commands: IPickCommand[]) => string[][]
+  trialFn: (g: Game, commands: IPickCommand[]) => string[]
 
-  constructor(name: string, setup: SetupFn, rules: RulesFn, playerNames: string[], seed: number, replay: string[][][]) {
+  constructor(name: string, setup: SetupFn, rules: RulesFn, playerNames: string[], seed: number, replay: string[][]) {
     let trialOptions = {}
     this.trialUpdate = this.trialUpdate.bind(this)
     this.trial = new Game(name, this.trialUpdate, setup, rules, playerNames, trialOptions, seed)
@@ -469,7 +424,7 @@ export class TrialSystem {
     this.replay = replay
   }
 
-  public async run(trialFn: (g: Game, commands: IPickCommand[]) => string[][]) {
+  public async run(trialFn: (g: Game, commands: IPickCommand[]) => string[]) {
     console.assert(!this.stopTrial, 'trial is already running')
     this.trialFn = trialFn
     let stopTrialPromise = new Promise(resolve => { this.stopTrial = resolve })
@@ -484,8 +439,8 @@ export class TrialSystem {
     }
   }
 
-  private trialUpdate(pickCommands: IPickCommand[]): Promise<string[][]> {
-    return new Promise<string[][]>((resolve, reject) => {
+  private trialUpdate(pickCommands: IPickCommand[]): Promise<string[]> {
+    return new Promise<string[]>((resolve, reject) => {
       if (typeof this.stopTrial !== 'function') {
         return // trial has ended, do nothing
       } else if (this.replayIndex < this.replay.length) {

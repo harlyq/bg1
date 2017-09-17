@@ -84,7 +84,7 @@ export class Game {
 
   name: string = ''
   registeredConditions: PickCondition[] = []
-  history: string[][][] = []
+  history: {[who: string]: string[][]} = {}
   uniqueId: number = 0
   lastPickId: number = -1
   options: {debug: boolean} = {debug: false}
@@ -94,21 +94,16 @@ export class Game {
   seed: number
   private random: seedrandom
   cacheFindLocationName: string
-  pickFn: (commands: IPickCommand[]) => Promise<string[][]>
+  pickFn: (commands: IPickCommand[]) => Promise<string[]>
   render: any
   pickCommands: IPickCommand[] = []
-  clientPromises: Promise<string[][]>[] = []
+  clientPromises: Promise<string[]>[] = []
   choices: string[][] = []
   isRunning: boolean = false
 
-  // the pickFn must return an array the same size as in the commands parameter
-  // Each element of the array is either undefined or an array of choices which
-  // match the parameters of the command for that index. The length of the array
-  // indicates the number of options chosen.
-  // TODO should we simplify the pickFn to just return a list of choices? We can
-  // then do assignment to the relevant command, such that if there are two
-  // commands with the same option, then we can return that option for both
-  constructor(name: string, pickFn?: (commands: IPickCommand[]) => Promise<string[][]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
+  // the pickFn takes a list of commands for a given 'who', and returns a list
+  // of choices that completely satisfy at least one of the commands
+  constructor(name: string, pickFn?: (commands: IPickCommand[]) => Promise<string[]>, setupFn?: (Game) => void, rules?, playerNames?: string[], options?: IGameOptions, seed: number = Date.now()) {
     this.name = name
     this.pickFn = pickFn
     this.setupFn = setupFn
@@ -116,7 +111,7 @@ export class Game {
     this.seed = seed
     this.random = seedrandom(seed, {state: true})
 
-    //this.history.push(seed)
+    this.history = {}
 
     // TODO where is the best place to do this?
     if (Array.isArray(playerNames)) {
@@ -187,8 +182,8 @@ export class Game {
     return list
   }
 
-  public getHistory(): string[][][] {
-    return this.history
+  public getHistory(who: string): string[][] {
+    return this.history[who]
   }
 
   static filterThingsInternal<T>(dbg: string, fn: string | string[] | ((string, any) => boolean), things: {[name: string]: T & INamed}): (T & INamed)[] {
@@ -730,27 +725,28 @@ export class Game {
 
         // Each command waits on the same set of promises, all results will
         // be the same for a given set
-        // results => string[chosen option][command][who]
-        const results: string[][][] = await Promise.all(this.clientPromises)
+        // results => string[chosen option][who]
+        const results: string[][] = await Promise.all(this.clientPromises)
         console.assert(results.length === Object.keys(commandBuckets).length)
 
         if (needPromise) {
-          // TODO fix this
-          //this.history.push(results)
+          for (let who in commandBuckets) {
+            // TODO fix history
+//            this.history[who].push(results[who])
+          }
         }
 
         // there is one item in results per 'who'
         const who = command.who
         const whoIndex = Object.keys(commandBuckets).indexOf(who)
         console.assert(whoIndex !== -1)
-        const whoResults: string[][] = results[whoIndex]
-        console.assert(whoResults.length === commandBuckets[who].length)
+        const whoResults: string[] = results[whoIndex]
 
-        // each result will have a response for each command
-        const i = commandBuckets[who].indexOf(command)
-        console.assert(i !== -1)
-        const choice = whoResults[i]
-        if (typeof choice !== 'undefined') {
+        // if the results are compatible with the command, then use the results
+        // (this means that multiple commands may return the same result)
+        let choice
+        if (this.isValidResult(command, whoResults)) {
+          choice = whoResults
           this.debugLog(`player ${who} ${type} '${choice}' from [${options}]`)
         }
 
@@ -785,6 +781,28 @@ export class Game {
   // public pickButton(who, buttons, count: PickCount = 1, condition?: PickCondition) {
   //   return {id: this.uniqueId++, type: 'pickButtons', who, options: buttons, count, condition: this.registeredConditions.indexOf(condition)}
   // }
+
+  public isValidResult(command: IPickCommand, results: any[]): boolean {
+    for (let val of results) {
+      if (command.options.indexOf(val) === -1) {
+        return false
+      }
+    }
+
+    if (results.length > 0 && command.condition >= 0) {
+      const conditionFn = this.registeredConditions[command.condition]
+      if (!conditionFn(this, command.who, results, command.conditionArg)) {
+        return false
+      }
+    }
+
+    let [min, max] = Game.parseCount(command.count, command.options.length)
+    if (results.length < min || results.length > max) {
+      return false
+    }
+
+    return true
+  }
 
   public validateResult(command: IPickCommand, result: any[]) {
     console.assert(!(result instanceof Promise), 'missing "await" before pick command')
