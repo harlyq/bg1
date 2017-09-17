@@ -804,25 +804,6 @@ export class Game {
     return true
   }
 
-  public validateResult(command: IPickCommand, result: any[]) {
-    console.assert(!(result instanceof Promise), 'missing "await" before pick command')
-
-    console.assert(Array.isArray(result), 'result is not an array')
-
-    for (let i = 0; i < result.length; ++i) {
-      // this may be due to global variables for not using the Game.random() functions
-      console.assert(command.options.indexOf(result[i]) !== -1, `the result contains options (${result}) which were not in the original command (${command.options})`)
-    }
-
-    if (result.length > 0 && command.condition >= 0) {
-      const conditionFn = this.registeredConditions[command.condition]
-      console.assert(conditionFn(this, command.who, result, command.conditionArg), `result (${result}) does not meet the command conditions`)
-    }
-
-    // TODO validate the number of results against the count
-    // TODO recursively validate the options (as they may be further commands)
-  }
-
   // a -1 in the count is replaced with countMax1
   private static parseCount(count: PickCount, countMax: number): [number, number] {
     let min = 1, max = 1

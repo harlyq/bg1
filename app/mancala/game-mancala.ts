@@ -59,7 +59,6 @@ async function turn(g: Game, player: string): Promise<string> {
   if (g.options.debug) {
     console.log(`*** ${player} plays ${result[0]} ***`)
   }
-  //g.validateResult(result)
 
   player = moveStones(g, player, result[0])
 
