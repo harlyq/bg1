@@ -1,4 +1,4 @@
-import {Game} from "../system/game"
+import {Game, ICardData, ILocationData} from "../system/game"
 import {GameSystem} from "../system/gamesystem"
 import {Chain} from "../system/chain"
 import {Graph} from "../system/graph"
@@ -13,6 +13,20 @@ const NUM_ARMIES_PER_PLAYER = 30
 const NUM_NAVIES_PER_PLAYER = 12
 const MAX_CARDS_PER_HAND = 3
 const MIN_UNITS_TO_ATTACK = 2
+
+// TODO is there some way to easily force these types
+interface ISSCardData extends ICardData {
+  type?: 'Britannia'|'Scandia'|'Gallia'|'Germania'|'Hellas'|'Iberia'|'Italia'|'Africa'|'Voyage'
+  kind?: 'army'|'navy'
+  color?: 'purple'|'red'|'orange'|'yellow'|'green'
+}
+
+interface ISSLocationData extends ILocationData {
+
+}
+
+class SwordAndSail extends Game {
+}
 
 const Action = {
   'ATTACK': 'ATTACK',
@@ -157,11 +171,11 @@ function isPlayerLocation(g: Game, player: string, location: string): boolean {
 }
 
 function isNavyLocation(g: Game, location: string): boolean {
-  return g.getCards(location).filter((card) => g.getCardData(card).type === 'navy').length  > 0
+  return g.getCards(location).filter((card) => g.getCardData(card).kind === 'navy').length  > 0
 }
 
 function isArmyLocation(g: Game, location: string): boolean {
-  return g.getCards(location).filter((card) => g.getCardData(card).type === 'army').length  > 0
+  return g.getCards(location).filter((card) => g.getCardData(card).kind === 'army').length  > 0
 }
 
 function isOccupied(g: Game, location: string): boolean {
@@ -176,10 +190,11 @@ function getLocationOwner(g: Game, location: string): string {
 }
 
 function setup(g: Game) {
-  europe.getSectors().map(sector => g.addLocation(sector))
+  const allPlayers = g.getAllPlayers()
+  europe.getSectors().map(sector => g.addLocation(sector, {faceUp: allPlayers}))
 
   g.addLocation('draw')
-  g.addLocation('discard')
+  g.addLocation('discard', {faceUp: allPlayers})
 
   // create action cards
   for (let cardSet of ACTION_CARDS) {
@@ -197,7 +212,9 @@ function setup(g: Game) {
     const armyLocation = `${player}_armies`
     const navyLocation = `${player}_navies`
 
-    g.addLocation(playerHand).addLocation(armyLocation).addLocation(navyLocation)
+    g.addLocation(playerHand, {faceUp: [player]})
+    g.addLocation(armyLocation, {faceUp: [player]})
+    g.addLocation(navyLocation, {faceUp: [player]})
 
     for (let i = 0; i < NUM_ARMIES_PER_PLAYER; ++i) {
       g.addCard(armyLocation, `${player}_army_${i}`, {kind: 'army', color: COLORS[colorIndex], owner: player})
@@ -275,7 +292,7 @@ async function takeCard(g: Game, player: string): Promise<number> {
   }
 
   let pickDrawLocations = await g.pickLocations(player, ['draw'], 1)
-  if (pickDrawLocations.length === 0) {
+  if (!pickDrawLocations) {
     return 0
   }
 
@@ -292,14 +309,14 @@ async function discardCard(g: Game, player: string): Promise<number> {
 
   // console.assert(g.getCardNames(playerHand).length > 0)
   let cards = await g.pickCards(player, g.getCards(playerHand), 1)
-  if (cards.length !== 1) {
+  if (!cards) {
     return 0
   }
   // console.assert(cards.length === 1)
   // force a pick of the 'discard' location to differentiate this action
   // from the 'play card' action, which also picks a card from the hand
   let locations = await g.pickLocations(player, ['discard'], 1)
-  if (locations.length !== 1) {
+  if (!locations) {
     return 0
   }
 
@@ -315,20 +332,23 @@ async function moveUnit(g: Game, player: string): Promise<number> {
   }
 
   let startLocations = await g.pickLocations(player, ownedLocations, 1)
-  if (startLocations.length !== 1) {
+  if (!startLocations) {
     return 0
   }
   // console.assert(startLocations.length === 1)
 
-  let isNavyUnit = g.getCardData(g.getCards(startLocations)[0]).kind === 'Navy'
+  let isNavyUnit = g.getCardData(g.getCards(startLocations)[0]).kind === 'navy'
 
   // pick an adjacent sector (armies can only move onto land)
   let adjacentLocations = europe.getAdjacentSectors(startLocations[0])
   let validLocations = isNavyUnit ? adjacentLocations : adjacentLocations.filter(loc => !isWater(loc))
   validLocations = validLocations.filter(loc => !isOccupied(g, loc))
+  if (validLocations.length === 0) {
+    return 0
+  }
 
   let endLocations = await g.pickLocations(player, validLocations, 1)
-  if (endLocations.length !== 1) {
+  if (!endLocations) {
     return 0
   }
   // console.assert(endLocations.length === 1)
@@ -347,7 +367,7 @@ async function playCard(g: Game, player: string): Promise<number> {
   }
 
   let cards = await g.pickCards(player, g.getCards(playerHand), 1)
-  if (cards.length !== 1) {
+  if (!cards) {
     return 0
   }
 
@@ -359,13 +379,13 @@ async function playCard(g: Game, player: string): Promise<number> {
     }
 
     let ownedLocations = getPlayerLocations(g, player)
-    let ownedArmyLocations = ownedLocations.filter(loc => g.getCardData(g.getCards(loc)[0]).type === 'Army')
-    if (ownedArmyLocations.length !== 1) {
+    let ownedArmyLocations = ownedLocations.filter(loc => isArmyLocation(g, loc))
+    if (ownedArmyLocations.length === 0) {
       return 0
     }
 
     let armyLocations = await g.pickLocations(player, ownedArmyLocations, 1)
-    if (armyLocations.length !== 1) {
+    if (!armyLocations) {
       return 0
     }
     let armyUnit = g.getCards(armyLocations[0])[0]
@@ -375,7 +395,7 @@ async function playCard(g: Game, player: string): Promise<number> {
   } else {
     // move one army to an empty sector in a region
     let regionLocations = REGIONS[cardType].filter(loc => g.getCards(loc).length === 0)
-    if (regionLocations.length === 0) {
+    if (!regionLocations) {
       return 0
     }
 
@@ -384,7 +404,7 @@ async function playCard(g: Game, player: string): Promise<number> {
     }
 
     let pickedLocations = await g.pickLocations(player, regionLocations, 1)
-    if (pickedLocations.length !== 1) {
+    if (!pickedLocations) {
       return 0
     }
 
@@ -418,7 +438,7 @@ async function attackUnit(g: Game, player: string, actionPoints: number): Promis
 
   // console.assert(attackableEnemyLocations.length > 0)
   let targetLocations = await g.pickLocations(player, attackableEnemyLocations, 1)
-  if (targetLocations.length === 0) {
+  if (!targetLocations) {
     return 0
   }
 
@@ -434,7 +454,7 @@ async function attackUnit(g: Game, player: string, actionPoints: number): Promis
   // player loses their first unit
   // the second unit is moved to the attacked location
   let attackLocations = await g.pickLocations(player, possibleAttackers, MIN_UNITS_TO_ATTACK)
-  if (attackLocations.length < MIN_UNITS_TO_ATTACK) {
+  if (!attackLocations) {
     return 0
   }
 
@@ -479,7 +499,7 @@ function getScore(g: Game, player: string): number {
 
 let playerClients = {
   'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(10, 3), // Game.consoleClient(), // GameSystem.randomClient()
-  'b': GameSystem.randomClient() // Game.consoleClient()
+  'b': GameSystem.humanClient(), //GameSystem.randomClient() // Game.consoleClient()
 }
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})

@@ -14,18 +14,26 @@ export interface IPlayer {
 interface ICard {
   name: string
   value?: any
-  data?: any
+  data?: ICardData
 }
 
 interface IDice extends ICard {
   faces: any[]
 }
 
+export interface ILocationData {
+  faceUp?: string[]
+}
+
+export interface ICardData {
+
+}
+
 interface ILocation {
   name: string
   value?: any
   cards?: string[]
-  data?: any
+  data?: ILocationData
 }
 
 type CardLocation = [ILocation, number]
@@ -98,8 +106,9 @@ export class Game {
   render: any
   pickCommands: IPickCommand[] = []
   clientPromises: Promise<string[]>[] = []
-  choices: string[][] = []
   isRunning: boolean = false
+  highlights: string[] = [] // TODO do we want this here?
+  onHumanPicked: (results: string[]) => void
 
   // the pickFn takes a list of commands for a given 'who', and returns a list
   // of choices that completely satisfy at least one of the commands
@@ -398,7 +407,9 @@ export class Game {
   }
 
   private addPlayerInternal(player: IPlayer): Game {
-    console.assert(!this.data.allPlayers[player.name], `(${player.name}) already exists`)
+    console.assert(!this.data.allPlayers[player.name], `Player (${player.name}) already exists`)
+    console.assert(!this.data.allCards[player.name], `Player (${player.name}) conflicts with an existing Card`)
+    console.assert(!this.data.allLocations[player.name], `Player (${player.name}) conflicts with an existing Location`)
     this.data.allPlayers[player.name] = player
     this.playerChain.add(player.name)
     return this
@@ -414,14 +425,16 @@ export class Game {
   }
 
   private addLocationInternal(place: ILocation) {
-    console.assert(!this.data.allLocations[place.name], `ILocation (${place.name}) already exists`)
+    console.assert(!this.data.allLocations[place.name], `Location (${place.name}) already exists`)
+    console.assert(!this.data.allCards[place.name], `Location (${place.name}) conflicts with an existing Card`)
+    console.assert(!this.data.allPlayers[place.name], `Location (${place.name}) conflicts with an existing Player`)
     this.data.allLocations[place.name] = place
     if (!Array.isArray(place.cards)) {
       place.cards = []
     }
   }
 
-  public addLocation(locationName: string, locationData?: any): Game {
+  public addLocation(locationName: string, locationData?: ILocationData): Game {
     // TODO assert that place.name is unique??
     const location = {name: locationName, data: locationData, cards: []}
     this.addLocationInternal(location)
@@ -429,13 +442,15 @@ export class Game {
   }
 
   private addCardInternal(card: ICard, to: ILocation, index: number) {
-    console.assert(!this.data.allCards[card.name], `ICard (${card.name}) already exists`)
+    console.assert(!this.data.allCards[card.name], `Card (${card.name}) already exists`)
+    console.assert(!this.data.allLocations[card.name], `Card (${card.name}) conflicts with an existing Location`)
+    console.assert(!this.data.allPlayers[card.name], `Card (${card.name}) conflicts with an existing Player`)
     this.insertCard(card, to, index)
     this.data.allCards[card.name] = card
     this.debugLog(`addCard ${card.name} to ${to.name}`)
   }
 
-  public addCard(locationName: string, cardName: string, cardData?: any, index: number = -1): Game {
+  public addCard(locationName: string, cardName: string, cardData?: ICardData, index: number = -1): Game {
     // TODO assert that card.name is unique??
     const card = {name: cardName, data: cardData}
     const location = this.data.allLocations[locationName]

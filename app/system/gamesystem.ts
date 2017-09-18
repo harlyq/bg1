@@ -322,6 +322,16 @@ export class GameSystem {
     }
   }
 
+  public static humanClient(): any {
+    return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number, parallelCommands: IPickCommand[]): Promise<string[]> => {
+      return new Promise<string[]>(resolve => {
+        g.highlights = commands.reduce((list, command) => Util.arrayUnion(list, command.options), [])
+        g.onHumanPicked = resolve
+        g.debugRender()
+      })
+    }
+  }
+
   // a -1 in the count is replaced with countMax1
   private static parseCount(count: PickCount, countMax: number): [number, number] {
     let min = 1, max = 1

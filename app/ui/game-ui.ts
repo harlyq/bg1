@@ -2,30 +2,34 @@ import {Game, IPickCommand} from "../system/game"
 import {GameSystem} from '../system/gamesystem'
 import * as m from "mithril"
 
-let selection: string[] = []
+let highlights = []
+let gamesystem
+let pickCallback
+let selections: string[] = []
 function toggleSelection(name: string) {
-  const index = selection.indexOf(name)
+  const index = selections.indexOf(name)
   if (index !== -1) {
-    const item = selection.splice(index, 1)
+    const item = selections.splice(index, 1)
     console.assert(item.length === 1 && item[0] === name)
   } else {
-    selection.push(name)
+    selections.push(name)
   }
+  gamesystem.g.debugRender()
 }
 
 const BGCard = {
   view: (vnode) => {
-    const command: IPickCommand = vnode.attrs.command
     const cardName = vnode.attrs.name
-    const canPick = command && command.type === 'pickCards' && command.options.indexOf(cardName) !== -1
-    const isPicked = selection.indexOf(cardName) !== -1
+    const gamesystem: GameSystem = vnode.attrs.gamesystem
+    const canPick = gamesystem && highlights.indexOf(cardName) !== -1
+    const isPicked = selections.indexOf(cardName) !== -1
     let className = '.bg-card'
     let attrs = {}
     if (isPicked) {
-      className = '.bg-card.picked'
+      className = '.bg-card.selected'
       attrs = {onclick: () => toggleSelection(cardName)}
     } else if (canPick) {
-      className = '.bg-card.can-pick'
+      className = '.bg-card.highlight'
       attrs = {onclick: () => toggleSelection(cardName)}
     }
 
@@ -37,17 +41,17 @@ const BGCard = {
 
 const BGLocation = {
   view: (vnode) => {
-    const command: IPickCommand = vnode.attrs.command
     const locationName = vnode.attrs.name
-    const canPick = command && command.type === 'pickLocations' && command.options.indexOf(locationName) !== -1
-    const isPicked = selection.indexOf(locationName) !== -1
+    const gamesystem: GameSystem = vnode.attrs.gamesystem
+    const canPick = gamesystem && highlights.indexOf(locationName) !== -1
+    const isPicked = selections.indexOf(locationName) !== -1
     let className = '.bg-place'
     let attrs = {}
     if (isPicked) {
-      className = '.bg-place.picked'
+      className = '.bg-place.selected'
       attrs = {onclick: () => toggleSelection(locationName), tabindex: 1   }
     } else if (canPick) {
-      className = '.bg-place.can-pick'
+      className = '.bg-place.highlight'
       attrs = {onclick: () => toggleSelection(locationName), tabindex: 1}
     }
 
@@ -55,7 +59,7 @@ const BGLocation = {
       m(className, attrs,
         m('div', `${locationName} (${vnode.attrs.cards.length})`),
         vnode.attrs.cards.slice().reverse().map((cardName, i) =>
-          m(BGCard, {name: cardName, key: cardName, command: command})
+          m(BGCard, {name: cardName, key: cardName, gamesystem: gamesystem})
         )
       )
     )
@@ -97,15 +101,16 @@ export const BGPlayer = {
 
 export const BGGame = {
   view: (vnode) => {
-    const gamesystem: GameSystem = vnode.attrs.gamesystem
+    gamesystem = vnode.attrs.gamesystem
     const command: IPickCommand = vnode.attrs.command
-    const pickCallback = vnode.attrs.callback
+    pickCallback = gamesystem.g.onHumanPicked
+    highlights = gamesystem.g.highlights || []
     const who = gamesystem.getViewer()
     const g = gamesystem.g
     return (
       m('.bg-game',
         m(BGHistory, {gamesystem: gamesystem}),
-        pickCallback ? m('button', {onclick: () => { pickCallback(selection); selection = [] }}, 'Commit') : m('div', 'AI playing'),
+        pickCallback ? m('button', {onclick: () => { pickCallback(selections); selections = [], highlights =  [] }}, 'Commit') : m('div', 'AI playing'),
         m('', {},
           Object.keys(g.data.allPlayers).map(playerName => {
             return m(BGPlayer, {gamesystem: gamesystem, name: playerName})
@@ -113,7 +118,7 @@ export const BGGame = {
           m(BGPlayer, {gamesystem: gamesystem, name: 'DEBUG'}),
         ),
         Object.keys(g.data.allLocations).map(locationName => {
-          return m(BGLocation, {name: locationName, cards: g.getCardsByWho(locationName, who), command: command, key: locationName})
+          return m(BGLocation, {name: locationName, cards: g.getCardsByWho(locationName, who), gamesystem: gamesystem, key: locationName})
         }),
       )
     )

@@ -19,20 +19,28 @@
   padding: 5px;
 }
 
-.bg-place.can-pick {
+.bg-card.highlight {
   background-color: lightGreen;
 }
 
-.bg-place.picked {
+.bg-card.selected {
   background-color: pink;
 }
 
-.bg-place.picked:focus {
+.bg-card.selected:focus {
   background-color: red;
 }
 
-.bg-place.can-pick:focus {
-  background-color: green;
+.bg-place.highlight {
+  background-color: lightGreen;
+}
+
+.bg-place.selected {
+  background-color: pink;
+}
+
+.bg-place.selected:focus {
+  background-color: red;
 }
 
 .bg-history-slider {

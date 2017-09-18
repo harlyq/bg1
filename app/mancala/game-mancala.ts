@@ -147,8 +147,8 @@ function findWinner(g: Game): string {
 }
 
 let playerClients = {
-  'a': GameSystem.monteCarloClient(1, 1), // Game.consoleClient(), GameSystem.randomClient(),
-  'b': GameSystem.randomClient() // Game.consoleClient()
+  'a': GameSystem.randomClient(), //GameSystem.monteCarloClient(1, 1), // Game.consoleClient(), GameSystem.randomClient(),
+  'b': GameSystem.humanClient() //GameSystem.randomClient() // Game.consoleClient()
 }
 
 let gs = new GameSystem(setup, rules, getScore, playerClients, {debug: true, saveHistory: true})
