@@ -107,8 +107,11 @@ export class Game {
   pickCommands: IPickCommand[] = []
   clientPromises: Promise<string[]>[] = []
   isRunning: boolean = false
-  highlights: string[] = [] // TODO do we want this here?
+
+  // TODO move this
+  highlights: string[] = []
   onHumanPicked: (results: string[]) => void
+  commands: IPickCommand[] = []
 
   // the pickFn takes a list of commands for a given 'who', and returns a list
   // of choices that completely satisfy at least one of the commands

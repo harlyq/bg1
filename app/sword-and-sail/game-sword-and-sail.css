@@ -1,3 +1,8 @@
+.bg-game {
+  display: flex;
+  flex-wrap: wrap;
+}
+
 .bg-card {
   display: flex;
   background-color: lightYellow;
@@ -13,6 +18,7 @@
 
 .bg-place {
   display: flex;
+  flex-wrap: wrap;
   background-color: lightBlue;
   color: darkBlue;
   outline: 1px solid darkBlue;

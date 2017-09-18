@@ -23,7 +23,8 @@ const pitChain = {
 }
 
 function setup(g: Game) {
-  pitNames.map(name => g.addLocation(name))
+  const allPlayers = g.getAllPlayers()
+  pitNames.map(name => g.addLocation(name, {faceUp: allPlayers}))
 
   let stone = 0
   for (let pit = 0; pit < pitCounts.length; ++pit) {

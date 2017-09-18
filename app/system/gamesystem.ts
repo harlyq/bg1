@@ -30,7 +30,7 @@ export class GameSystem {
   pendingCommands: any[] = []
   render: any
   resolveSeek: any
-  viewer: string = ''
+  viewer: string = 'DEBUG'
 
   constructor(setup: SetupFn, rules, scoreFn, playerClients, options: IGameOptions = {}, seed = Date.now(), replay: any[] = []) {
     this.setup = setup
@@ -325,8 +325,14 @@ export class GameSystem {
   public static humanClient(): any {
     return async (g: Game, commands: IPickCommand[], scoreFn: (Game, string) => number, parallelCommands: IPickCommand[]): Promise<string[]> => {
       return new Promise<string[]>(resolve => {
+        g.commands = commands
         g.highlights = commands.reduce((list, command) => Util.arrayUnion(list, command.options), [])
-        g.onHumanPicked = resolve
+        g.onHumanPicked = (choices) => {
+          g.commands = []
+          g.highlights = []
+          delete g.onHumanPicked
+          resolve(choices)
+        }
         g.debugRender()
       })
     }
