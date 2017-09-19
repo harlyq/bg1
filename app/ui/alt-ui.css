@@ -1,0 +1,11 @@
+tspan {
+  fill: purple !important;
+}
+
+text:before {
+  content: 'Ho' !important;
+}
+
+#path4517 {
+  fill: green !important;
+}

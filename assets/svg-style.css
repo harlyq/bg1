@@ -1,0 +1,11 @@
+tspan {
+  fill: darkGrey !important;
+}
+
+text:before {
+  content: 'Hello' !important;
+}
+
+#path4517 {
+  fill: blue !important;
+}

@@ -14,6 +14,17 @@ function toggleSelection(name: string) {
   } else {
     selections.push(name)
   }
+
+  // if selecting a single thing is valid, then don't wait for a confirm
+  // before sending back the choice
+  if (selections.length === 1) {
+    if (gamesystem.g.commands.some(command => gamesystem.g.isValidResult(command, selections))) {
+      pickCallback(selections)
+      selections = []
+      highlights = []
+    }
+  }
+
   gamesystem.g.debugRender()
 }
 

@@ -33,5 +33,8 @@
     "mithril": "^1.1.3",
     "seedrandom": "^2.4.3",
     "svg.js": "^2.6.3"
+  },
+  "scripts": {
+    "server": "node_modules/.bin/webpack-dev-server"
   }
 }

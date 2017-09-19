@@ -1,4 +1,5 @@
 import * as m from 'mithril'
+import * as SVG from 'svg.js'
 
 // enum LocationFacing {
 //   UP,
@@ -222,7 +223,7 @@ gs.addCard('deck', 'c?')
 gs.addCard('deck', 'c?')
 
 const content = document.getElementById('content')
-gs.render(content)
+//gs.render(content)
 
 let moveList = ['c4', 'c3', 'c1']
 let moveIndex = 0
@@ -245,4 +246,50 @@ function moveCard() {
   }
 }
 
-setTimeout(moveCard, 2000)
+//setTimeout(moveCard, 2000)
+
+
+let data = {value: 'hi', name: 'blah'}
+const r = /}}|{{|{(\w+)}/g
+function parse(str) {
+  return str.replace(r, (_, attr) => {
+    switch(_) {
+      case '{{': return '{'
+      case '}}': return '}'
+      default: return attr.split('.').reduce((v, x) => v[x], data)
+    }
+  })
+}
+
+function makeCard(data) {
+  // could be an svg or an img
+  let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+}
+
+
+{
+  let draw = SVG('content').size(500,500)//.rotate(10, 0, 0)
+  let rect = draw.rect(100, 100).stroke('#006').fill('#ffc')
+  let text = draw.text(parse('{value} {name}')).center(100, 100).font({size: 80})
+  draw.rotate(10, 0, 0)
+
+  let svgObject = document.querySelector("#svgObject") as any
+  let svgDoc = svgObject.contentDocument
+  let linkElm = svgDoc.createElementNS("http://www.w3.org/1999/xhtml", "link");
+  linkElm.setAttribute("href", "svg-style.css");
+  linkElm.setAttribute("type", "text/css");
+  linkElm.setAttribute("rel", "stylesheet");
+  svgDoc.querySelector("svg").appendChild(linkElm);
+
+  let cardFront = svgDoc.querySelector('#card-front')
+  let cardFront2 = cardFront.cloneNode(true)
+  let svgCardFront2 = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+  svgCardFront2.setAttribute("width", "300px")
+  svgCardFront2.setAttribute("height", "300px")
+  svgCardFront2.appendChild(cardFront2)
+  document.body.appendChild(svgCardFront2)
+
+  svgDoc.querySelector("#tspan4562").textContent = 'new content'
+
+  let cardElem = makeCard({})
+}
