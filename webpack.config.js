@@ -12,7 +12,7 @@ module.exports = {
     'game-sword-and-sail': `${PATHS.dist}/sword-and-sail/game-sword-and-sail.js`,
     'game-for-sale': `${PATHS.dist}/for-sale/game-for-sale.js`,
     'game-citadels': `${PATHS.dist}/citadels/game-citadels.js`,
-    'test-ui': `${PATHS.dist}/ui/test/test-ui.js`,
+    'dom-test-ui': `${PATHS.dist}/ui/test/dom-test-ui.js`,
     'alt-ui': `${PATHS.dist}/ui/alt-ui.js`, // HACK
   },
   output: {

@@ -35,6 +35,7 @@
     "svg.js": "^2.6.3"
   },
   "scripts": {
-    "server": "node_modules/.bin/webpack-dev-server"
+    "server": "node_modules/.bin/webpack-dev-server",
+    "test": "./node_modules/.bin/tape ./dist/**/test/test-*.js"
   }
 }
