@@ -1,4 +1,4 @@
-import Util from './util'
+import {Util} from './util'
 import {Chain} from './chain'
 // import * as ReadlineSync from 'readline-sync'
 //import * as MersenneTwister from 'mersenne-twister' // HACK not a module
@@ -131,7 +131,7 @@ export class Game {
     }
 
     if (options) {
-      this.options = Util.copyJSON(options)
+      this.options = Util.mergeJSON({}, options)
     }
 
     if (setupFn) {
@@ -149,12 +149,12 @@ export class Game {
 
   // take a snapshot of the cards, locations and values
   public takeSnapshot(): IGameState {
-    return Util.copyJSON(this.data)
+    return Util.mergeJSON({}, this.data)
   }
 
   // rollback the cards, locations and values to the last checkpoint
   public rollbackSnapshot(snapshot: IGameState) {
-    this.data = Util.copyJSON(snapshot)
+    this.data = Util.mergeJSON({}, snapshot)
   }
 
   public debugLog(msg) {

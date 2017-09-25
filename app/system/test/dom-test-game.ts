@@ -1,6 +1,6 @@
 import * as Tape from 'Tape'
 import {Game, IPickCommand} from '../game'
-import Util from '../util'
+import {Util} from '../util'
 
 Tape.test('add player', (test) => {
   let g = new Game('Test')

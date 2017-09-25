@@ -1,6 +1,6 @@
 import {IPickCommand, Game} from '../system/game'
 import {GameSystem} from '../system/gamesystem'
-import Util from '../system/util'
+import {Util} from '../system/util'
 import {Chain} from '../system/chain'
 import * as m from 'mithril'
 import {BGGame} from '../ui/game-ui'

@@ -1,4 +1,4 @@
-export default class Util {
+export class Util {
   public static clamp(x, min, max) {
     return Math.max(min, Math.min(max, x))
   }
@@ -291,20 +291,26 @@ export default class Util {
     }
   }
 
-  public static copyJSON(src: any) {
-    if (src === null || typeof(src) !== 'object') {
+  public static mergeJSON(base: any, src: any) {
+    if (typeof src === 'undefined') {
+      return base
+    } else if (src === null || typeof(src) !== 'object') {
       return src
-    } else if (Array.isArray(src)) {
+    } else if (!base) {
+      base = Array.isArray(src) ? [] : {}
+    }
+
+    if (Array.isArray(src)) {
       let dest = []
       const n = src.length
       for (let i = 0; i < n; ++i) {
-        dest[i] = Util.copyJSON(src[i])
+        dest[i] = Util.mergeJSON(dest[i], src[i])
       }
       return dest
     } else {
       let dest = {}
       for (let key in src) {
-        dest[key] = Util.copyJSON(src[key])
+        dest[key] = Util.mergeJSON(dest[key], src[key])
       }
       return dest
     }

@@ -366,7 +366,7 @@ function meldCondition(g: Game, player: string, cards: string[], options: MeldOp
 
 async function meld(g: Game, player: string, team: string, initialMeldOptions: MeldOptions) {
   let cards = []
-  let meldOptions: MeldOptions = Util.copyJSON(initialMeldOptions)
+  let meldOptions: MeldOptions = Util.mergeJSON({}, initialMeldOptions)
   let meldCount = 0
   const playerHand = `${player}_hand`
   const snapshot = g.takeSnapshot()

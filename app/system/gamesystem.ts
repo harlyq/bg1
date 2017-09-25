@@ -1,5 +1,5 @@
 import {Game, IGameOptions, IPickCommand, PickCount} from './game'
-import Util from './util'
+import {Util} from './util'
 
 enum Playback {
   PLAY,
