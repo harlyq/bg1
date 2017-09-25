@@ -1,5 +1,6 @@
 import * as m from 'mithril'
 import * as SVG from 'svg.js'
+import {Util} from '../system/util'
 
 // enum LocationFacing {
 //   UP,
@@ -23,9 +24,9 @@ enum LocationAlign {
 }
 
 interface ICard {
-  faceUp: boolean
-  w: number
-  h: number
+  faceUp?: boolean
+  w?: number
+  h?: number
 }
 
 interface ILocation {
@@ -145,31 +146,42 @@ class GameStruct {
   allLocations: {[name: string]: ILocation} = {}
   allPlayers: {[name: string]: IPlayer} = {}
 
-  // card backs must all have the same information
+  // one card can be added to multiple locations (e.g. card backs), but this
+  // data will affect all cards with that name
   public addCard(location: string, card: string, data?: ICard) {
-    // console.assert(typeof this.allCards[card] === 'undefined')
     console.assert(typeof this.allLocations[location] !== 'undefined')
+    console.assert(typeof this.allCards[card] !== 'undefined')
 
     let iLocation = this.allLocations[location]
-    this.allCards[card] = data || this.allCards[card] // ref is ok?, this will replace any existing info
+    this.allCards[card] = Util.mergeJSON(this.allCards[card], data)
     iLocation.cards.push(card)
   }
 
-  public addLocation(location: string, data: ILocation) {
+  public createCard(card: string, data: ICard) {
+    console.assert(typeof this.allCards[card] === 'undefined')
+    console.assert(typeof this.allLocations[card] === 'undefined')
+    console.assert(typeof this.allPlayers[card] === 'undefined')
+    this.allCards[card] = Util.mergeJSON(this.allCards[card], data)
+  }
+
+  public createLocation(location: string, data: ILocation) {
+    console.assert(typeof this.allCards[location] === 'undefined')
     console.assert(typeof this.allLocations[location] === 'undefined')
-    this.allLocations[location] = data
-    data.cards = []
+    console.assert(typeof this.allPlayers[location] === 'undefined')
+    this.allLocations[location] = Util.mergeJSON(this.allLocations[location], data)
+    this.allLocations[location].cards = []
   }
 
-  public addPlayer(player: string, data: IPlayer) {
+  public createPlayer(player: string, data: IPlayer) {
+    console.assert(typeof this.allCards[player] === 'undefined')
+    console.assert(typeof this.allLocations[player] === 'undefined')
     console.assert(typeof this.allPlayers[player] === 'undefined')
-    this.allPlayers[player] = data
+    this.allPlayers[player] = Util.mergeJSON(this.allPlayers[player], data)
   }
 
-  // TODO this defines a specific card to a location, what about
-  // general blank cards? Do we just pick a specific blank card at
-  // random
-  public moveCard(from: string, fromIndex: number, to: string, toIndex: number, newCard: string, newData: ICard) {
+  // This removes the card from the 'from' location and adds a card to the
+  // 'to' location, potentially changing the card name.
+  public moveCard(from: string, fromIndex: number, to: string, toIndex: number, newCard?: string, newData?: ICard) {
     let iFrom = this.allLocations[from]
     let iTo = this.allLocations[to]
     console.assert(typeof iFrom !== 'undefined')
@@ -178,9 +190,13 @@ class GameStruct {
     console.assert(toIndex >= 0 && toIndex <= iTo.cards.length)
 
     let oldCard = iFrom.cards.splice(fromIndex, 1)
+    if (typeof newCard === 'undefined') {
+      newCard = oldCard[0]
+    }
+
     iTo.cards.splice(toIndex, 0, newCard)
 
-    this.allCards[newCard] = newData
+    this.allCards[newCard] = Util.mergeJSON(this.allCards[newCard], newData)
   }
 
   public getCardAttrs(card: string, location: string, i: number, n: number): {[key: string]: any} {
@@ -201,6 +217,10 @@ class GameStruct {
     return attrs
   }
 
+  public getPlayerAttrs(player: string): {[key: string]: any} {
+    return {}
+  }
+
   public getCards(location: string): string[] {
     const iLocation = this.allLocations[location]
     console.assert(typeof iLocation !== 'undefined')
@@ -214,16 +234,23 @@ class GameStruct {
 }
 
 let gs = new GameStruct()
-gs.addLocation('deck', {x: 10, y: 10, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
-gs.addLocation('discard', {x: 10, y: 110, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
-gs.addLocation('hand', {x: 10, y: 220, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
-gs.addCard('deck', 'c?', {w: 60, h: 80, faceUp: false})
+gs.createLocation('deck', {x: 10, y: 10, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
+gs.createLocation('discard', {x: 10, y: 120, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
+gs.createLocation('hand', {x: 10, y: 230, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
+
+gs.createCard('c?', {w: 60, h: 80}) // card back
+gs.createCard('c1', {w: 60, h: 80})
+gs.createCard('c2', {w: 60, h: 80})
+gs.createCard('c3', {w: 60, h: 80})
+gs.createCard('c4', {w: 60, h: 80})
+
+gs.addCard('deck', 'c?')
 gs.addCard('deck', 'c?')
 gs.addCard('deck', 'c?')
 gs.addCard('deck', 'c?')
 
 const content = document.getElementById('content')
-//gs.render(content)
+gs.render(content)
 
 let moveList = ['c4', 'c3', 'c1']
 let moveIndex = 0
@@ -232,21 +259,21 @@ let move2Index = 0
 
 function moveCard() {
   if (moveIndex < moveList.length) {
-    gs.moveCard('deck', moveList.length - moveIndex - 1, 'discard', moveIndex, moveList[moveIndex], {w: 60, h: 80, faceUp: true})
+    gs.moveCard('deck', moveList.length - moveIndex - 1, 'discard', moveIndex, moveList[moveIndex])
     moveIndex++
     gs.render(content)
     setTimeout(moveCard, 2000)
   } else if (move2Index < move2List.length) {
     const card = move2List[move2Index]
     const index = gs.getCards('discard').indexOf(card)
-    gs.moveCard('discard', index, 'hand', 0, 'c?', {w: 60, h: 80, faceUp: false}) // TODO remove duplication of w and h
+    gs.moveCard('discard', index, 'hand', 0, 'c?')
     move2Index++
     gs.render(content)
     setTimeout(moveCard, 2000)
   }
 }
 
-//setTimeout(moveCard, 2000)
+setTimeout(moveCard, 2000)
 
 
 let data = {value: 'hi', name: 'blah'}

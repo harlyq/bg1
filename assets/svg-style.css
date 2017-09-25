@@ -7,5 +7,25 @@ text:before {
 }
 
 #path4517 {
-  fill: blue !important;
+  fill: orange !important;
+}
+
+rect {
+  fill: lightBlue !important;
+}
+
+.rect {
+  fill: red !important;
+}
+
+#rect817 {
+  fill: green !important;
+}
+
+.rect:hover {
+  fill: black !important;
+}
+
+#dragging {
+  pointer-events: none; /* document.elementFromPoint(x, y) will ignore #dragging */
 }

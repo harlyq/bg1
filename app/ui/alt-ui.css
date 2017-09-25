@@ -1,3 +1,19 @@
+.game {
+  position: relative;
+}
+
+.card {
+  position: absolute;
+  background-color: #ffa;
+  outline: 1px solid #cc8;
+}
+
+.location {
+  position: absolute;
+  background-color: lightBlue;
+  outline: 1px solid blue;
+}
+
 tspan {
   fill: purple !important;
 }
