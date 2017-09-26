@@ -6,6 +6,7 @@
   position: absolute;
   background-color: #ffa;
   outline: 1px solid #cc8;
+  transition: transform 0.5s;
 }
 
 .location {

@@ -27,10 +27,11 @@ interface ICard {
   faceUp?: boolean
   w?: number
   h?: number
+  image?: string
 }
 
 interface ILocation {
-  cards?: string[]
+  cardKeys?: number[]
   // facing: LocationFacing // manage facing on the server
   x: number
   y: number
@@ -78,10 +79,12 @@ const ViewGame = {
     let cards = []
     Object.keys(game.allLocations).forEach(location => {
       const iLocation = game.allLocations[location]
-      const n = iLocation.cards.length
-      iLocation.cards.forEach((card, i) => {
-        cards.push( m( ViewCard, {name: card, ...game.getCardAttrs(card, location, i, n)} ) )
+      const n = iLocation.cardKeys.length
+      iLocation.cardKeys.forEach((key, i) => {
+        let card = game.allCardKeys[key]
+        cards.push( m( ViewCard, {name: key, key: key, ...game.getCardAttrs(card, location, i, n)} ) )
       })
+      cards.sort((a,b) => a.key - b.key)
     })
 
     // use absolute positioning and z-index for everything, no nesting means faster rendering
@@ -120,7 +123,7 @@ function calcFanOffset(align: LocationAlign, x, w, dx, i, n): number {
   }
 }
 
-function calcCardAttrs(cardParams: ICard, locationParams: ILocation, i: number, n: number): {[key: string]: any} {
+function calcCardPositionAttrs(cardParams: ICard, locationParams: ILocation, i: number, n: number): {[key: string]: any} {
   let x = 0, y = 0
   const cx = locationParams.x + locationParams.w/2
   const cy = locationParams.y + locationParams.h/2
@@ -133,18 +136,20 @@ function calcCardAttrs(cardParams: ICard, locationParams: ILocation, i: number, 
   }
 
   // TODO when we build up the card list from low i to high i, zIndex is not needed
-  return {style: {left: x + 'px', top: y + 'px', width: cardParams.w + 'px', height: cardParams.h + 'px', zIndex: i}, faceUp: cardParams.faceUp}
+  return {style: {transform: `translate(${x}px, ${y}px)`, width: cardParams.w + 'px', height: cardParams.h + 'px', zIndex: i}, faceUp: cardParams.faceUp}
 }
 
-function calcLocationAttrs(params: ILocation): {[key: string]: any} {
-  return {style: {left: params.x + 'px', top: params.y + 'px', width: params.w + 'px', height: params.h + 'px'}}
+function calcLocationPositionAttrs(params: ILocation): {[key: string]: any} {
+  return {style: {transform: `translate(${params.x}px, ${params.y}px)`, width: params.w + 'px', height: params.h + 'px'}}
 }
 
 
 class GameStruct {
+  allCardKeys: {[key: number]: string} = {} // each key maps to a card
   allCards: {[name: string]: ICard} = {}
-  allLocations: {[name: string]: ILocation} = {}
+  allLocations: {[name: string]: ILocation} = {} // each location contains a number of unique keys
   allPlayers: {[name: string]: IPlayer} = {}
+  uniqueKey: number = 0
 
   // one card can be added to multiple locations (e.g. card backs), but this
   // data will affect all cards with that name
@@ -154,7 +159,9 @@ class GameStruct {
 
     let iLocation = this.allLocations[location]
     this.allCards[card] = Util.mergeJSON(this.allCards[card], data)
-    iLocation.cards.push(card)
+    let key = this.uniqueKey++
+    this.allCardKeys[key] = card
+    iLocation.cardKeys.push(key)
   }
 
   public createCard(card: string, data: ICard) {
@@ -169,7 +176,7 @@ class GameStruct {
     console.assert(typeof this.allLocations[location] === 'undefined')
     console.assert(typeof this.allPlayers[location] === 'undefined')
     this.allLocations[location] = Util.mergeJSON(this.allLocations[location], data)
-    this.allLocations[location].cards = []
+    this.allLocations[location].cardKeys = []
   }
 
   public createPlayer(player: string, data: IPlayer) {
@@ -186,15 +193,17 @@ class GameStruct {
     let iTo = this.allLocations[to]
     console.assert(typeof iFrom !== 'undefined')
     console.assert(typeof iTo !== 'undefined')
-    console.assert(fromIndex >= 0 && fromIndex <= iFrom.cards.length)
-    console.assert(toIndex >= 0 && toIndex <= iTo.cards.length)
+    console.assert(fromIndex >= 0 && fromIndex <= iFrom.cardKeys.length)
+    console.assert(toIndex >= 0 && toIndex <= iTo.cardKeys.length)
 
-    let oldCard = iFrom.cards.splice(fromIndex, 1)
-    if (typeof newCard === 'undefined') {
-      newCard = oldCard[0]
+    let oldCard = iFrom.cardKeys.splice(fromIndex, 1)
+    let key = oldCard[0]
+
+    if (typeof newCard !== 'undefined') {
+      this.allCardKeys[key] = newCard
     }
 
-    iTo.cards.splice(toIndex, 0, newCard)
+    iTo.cardKeys.splice(toIndex, 0, key)
 
     this.allCards[newCard] = Util.mergeJSON(this.allCards[newCard], newData)
   }
@@ -205,7 +214,8 @@ class GameStruct {
     const iLocation = this.allLocations[location]
     console.assert(typeof iLocation !== 'undefined')
 
-    let attrs = calcCardAttrs(iCard, iLocation, i, n)
+    let attrs = calcCardPositionAttrs(iCard, iLocation, i, n)
+    attrs = Util.mergeJSON(attrs, calcImageAttrs(iCard))
     return attrs
   }
 
@@ -213,7 +223,7 @@ class GameStruct {
     const iLocation = this.allLocations[location]
     console.assert(typeof iLocation !== 'undefined')
 
-    let attrs = calcLocationAttrs(iLocation)
+    let attrs = calcLocationPositionAttrs(iLocation)
     return attrs
   }
 
@@ -225,7 +235,14 @@ class GameStruct {
     const iLocation = this.allLocations[location]
     console.assert(typeof iLocation !== 'undefined')
 
-    return iLocation.cards
+    return iLocation.cardKeys.map(key => this.allCardKeys[key])
+  }
+
+  public getCardCount(location: string): number {
+    const iLocation = this.allLocations[location]
+    console.assert(typeof iLocation !== 'undefined')
+
+    return iLocation.cardKeys.length
   }
 
   public render(elem) {
@@ -238,11 +255,11 @@ gs.createLocation('deck', {x: 10, y: 10, w: 200, h: 100, style: LocationStyle.FA
 gs.createLocation('discard', {x: 10, y: 120, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
 gs.createLocation('hand', {x: 10, y: 230, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
 
-gs.createCard('c?', {w: 60, h: 80}) // card back
-gs.createCard('c1', {w: 60, h: 80})
-gs.createCard('c2', {w: 60, h: 80})
-gs.createCard('c3', {w: 60, h: 80})
-gs.createCard('c4', {w: 60, h: 80})
+gs.createCard('c?', {image:'/assets/card-back.jpg', w: 60, h: 80}) // card back
+gs.createCard('c1', {image:'/assets/spritesheet.json#test01.svg', w: 60, h: 80})
+gs.createCard('c2', {image:'/assets/test02.svg', w: 60, h: 80})
+gs.createCard('c3', {image:'/assets/frog.jpg', w: 60, h: 80})
+gs.createCard('c4', {image:'/assets/animate-bird-slide-25.gif', w: 60, h: 80})
 
 gs.addCard('deck', 'c?')
 gs.addCard('deck', 'c?')
@@ -257,23 +274,23 @@ let moveIndex = 0
 let move2List = ['c1', 'c3']
 let move2Index = 0
 
-function moveCard() {
+function demoMoveCard() {
   if (moveIndex < moveList.length) {
-    gs.moveCard('deck', moveList.length - moveIndex - 1, 'discard', moveIndex, moveList[moveIndex])
+    gs.moveCard('deck', gs.getCardCount('deck') - 1, 'discard', moveIndex, moveList[moveIndex])
     moveIndex++
     gs.render(content)
-    setTimeout(moveCard, 2000)
+    setTimeout(demoMoveCard, 2000)
   } else if (move2Index < move2List.length) {
     const card = move2List[move2Index]
     const index = gs.getCards('discard').indexOf(card)
     gs.moveCard('discard', index, 'hand', 0, 'c?')
     move2Index++
     gs.render(content)
-    setTimeout(moveCard, 2000)
+    setTimeout(demoMoveCard, 2000)
   }
 }
 
-setTimeout(moveCard, 2000)
+setTimeout(demoMoveCard, 2000)
 
 
 let data = {value: 'hi', name: 'blah'}
@@ -334,59 +351,74 @@ function setAttributes(elem: HTMLElement, data: any) {
 // spritesheet.json#card-back.jpg
 // spritesheet.json#bird-1.jpg
 // card-back.jpg
-async function getCardImage(card, data): Promise<Element> {
+let tilesetCache = {}
+let fetchCache = {}
+function getTileset(filename: string): {[key: string]: any} {
+  if (tilesetCache[filename]) {
+    return tilesetCache[filename]
+  }
+  if (fetchCache[filename]) {
+    return {}
+  }
+  fetchCache[filename] = fetch(filename)
+    .then(result => result.text())
+    .then(json => {
+      tilesetCache[filename] = JSON.parse(json)
+      gs.render(content) // hack
+    })
+}
+
+function calcImageAttrs(data) {
+  if (typeof data['image'] !== 'string') {
+    return {}
+  }
+
   let image = data.image.replace(/\\/g, '/')
   let [filename, id] = image.split('#')
   let ext = filename.substr(filename.lastIndexOf('.') + 1)
   let w = data.w
   let h = data.h
+  let attrs = {}
 
   switch (ext) {
     case 'json': {
-      let result = await fetch(filename)
-      console.assert(result.ok, `unable to load tilesheet '${filename}'`)
-      let tileset = JSON.parse(await result.text())
-      console.assert(typeof tileset.meta !== 'undefined', `no meta in tilesheet '${filename}'`)
-      console.assert(typeof tileset.frames !== 'undefined', `no frames in tilesheet '${filename}'`)
-      console.assert(Object.keys(tileset.frames).length > 0, `no frames in tilesheet '${filename}'`)
-      console.assert(tileset.frames[id ? id : 0], `frame '${id}' not found in tilesheet '${filename}'`)
+      let tileset = getTileset(filename)
+      if (tileset) {
+        let path = filename.substr(0, filename.lastIndexOf('/') + 1)
+        let info = tileset.frames[id ? id : 0]
+        let frame = info.frame
+        let imageSize = tileset.meta.size
+        let bw = imageSize.w*w/frame.w
+        let bh = imageSize.h*h/frame.h
+        let x = -frame.x*w/frame.w
+        let y = -frame.y*h/frame.h
 
-      let path = filename.substr(0, filename.lastIndexOf('/') + 1)
-      let info = tileset.frames[id ? id : 0]
-      let frame = info.frame
-      let imageSize = tileset.meta.size
-      let bw = imageSize.w*w/frame.w
-      let bh = imageSize.h*h/frame.h
-      let x = -frame.x*w/frame.w
-      let y = -frame.y*h/frame.h
-
-      image = path + tileset.meta.image
-
-      let div = document.createElement('div')
-      div.className = 'game-card'
-      div.id = card
-      div.setAttribute('style', `background-position:${x}px ${y}px; background-size:${bw}px ${bh}px; width:${w}px; height:${h}px; background-image:url('${image}')`)
-      return div
+        image = path + tileset.meta.image
+        attrs = {
+          style: {
+            backgroundImage: `url('${image}')`,
+            backgroundPosition: `${x}px ${y}px`,
+            backgroundSize: `${bw}px ${bh}px`,
+            width: `${w}px`,
+            height: `${h}px`,
+          }
+        }
+      }
+      break
     }
 
     default: {
-      let div = document.createElement('div')
-      div.className = 'game-card'
-      div.id = card
-      div.setAttribute('style', `background-size:${w}px ${h}px; width:${w}px; height:${h}px; background-image:url('${image}')`)
-      return div
+      attrs = {
+        style: {
+          backgroundImage: `url('${image}')`,
+          backgroundSize: `${w}px ${h}px`,
+          width: `${w}px`,
+          height: `${h}px`,
+        }
+      }
+      break
     }
   }
-}
 
-async function loadImages() {
-  let w = 500
-  let h = 600
-  document.body.appendChild(await getCardImage('c1', {image:'/assets/frog.jpg', w, h}))
-  document.body.appendChild(await getCardImage('c2', {image:'/assets/animate-bird-slide-25.gif', w, h}))
-  document.body.appendChild(await getCardImage('c3', {image:'/assets/test01.svg#card-front', w, h}))
-  document.body.appendChild(await getCardImage('c4', {image:'/assets/test02.svg', w, h}))
-  document.body.appendChild(await getCardImage('c5', {image:'/assets/spritesheet.json#test02.svg', w, h}))
+  return attrs
 }
-
-loadImages()

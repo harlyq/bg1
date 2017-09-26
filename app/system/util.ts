@@ -301,18 +301,16 @@ export class Util {
     }
 
     if (Array.isArray(src)) {
-      let dest = []
       const n = src.length
       for (let i = 0; i < n; ++i) {
-        dest[i] = Util.mergeJSON(dest[i], src[i])
+        base[i] = Util.mergeJSON(base[i], src[i])
       }
-      return dest
+      return base
     } else {
-      let dest = {}
       for (let key in src) {
-        dest[key] = Util.mergeJSON(dest[key], src[key])
+        base[key] = Util.mergeJSON(base[key], src[key])
       }
-      return dest
+      return base
     }
   }
 }
