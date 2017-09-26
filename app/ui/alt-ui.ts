@@ -278,9 +278,9 @@ setTimeout(moveCard, 2000)
 
 let data = {value: 'hi', name: 'blah'}
 const r = /}}|{{|{(\w+)}/g
-function parse(str) {
-  return str.replace(r, (_, attr) => {
-    switch(_) {
+function parse(str, data) {
+  return str.replace(r, (match, attr) => {
+    switch(match) {
       case '{{': return '{'
       case '}}': return '}'
       default: return attr.split('.').reduce((v, x) => v[x], data)
@@ -297,7 +297,7 @@ function makeCard(data) {
 {
   let draw = SVG('content').size(500,500)//.rotate(10, 0, 0)
   let rect = draw.rect(100, 100).stroke('#006').fill('#ffc')
-  let text = draw.text(parse('{value} {name}')).center(100, 100).font({size: 80})
+  let text = draw.text(parse('{value} {name}', data)).center(100, 100).font({size: 80})
   draw.rotate(10, 0, 0)
 
   let svgObject = document.querySelector("#svgObject") as any
@@ -320,3 +320,130 @@ function makeCard(data) {
 
   let cardElem = makeCard({})
 }
+
+function setAttributes(elem: HTMLElement, data: any) {
+  for (let key in data) {
+    elem.setAttribute(key, data[key])
+  }
+  return elem
+}
+
+// bird.png
+// bird.svg#owl // id within an svg
+// spritesheet.json#test01.svg  // this will be a bitmap
+// spritesheet.json#card-back.jpg
+// spritesheet.json#bird-1.jpg
+// card-back.jpg
+async function getCardImage(card, data): Promise<Element> {
+  let image = data.image.replace(/\\/g, '/')
+  let [filename, id] = image.split('#')
+  let ext = filename.substr(filename.lastIndexOf('.') + 1)
+
+  switch (ext) {
+    // default: {
+    //   let img = document.createElement('img')
+    //   img.id = imagename
+    //   img.src = filename
+    //   // setAttributes(elem, {id: image, src: filename})
+    //   return img
+    // }
+
+    // case 'svg': {
+    default: {
+      let div = document.createElement('div')
+      div.id = card
+      div.setAttribute('style', `background-size:${data.w}px ${data.h}px; width:${data.w}px; height:${data.h}px; background-image:url('${image}')`)
+      return div
+
+      // if (typeof id === 'undefined') {
+      //   let svg = document.createElement('object')
+      //   svg.type = 'image/svg+xml'
+      //   svg.data = filename
+      //   return svg
+      // } else {
+      //   let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
+      //   svg.innerHTML = `<use href='${image}'></use>`
+      //   return svg
+      // }
+
+      // let svg = document.createElement('object')
+      // svg.onerror = (e) => console.log('error:' + e)
+      // svg.onload = (e) => console.log('load:' + e)
+      // svg.type = 'image/svg+xml'
+      // svg.data = filename
+      // return svg
+
+      // let result = await fetch(filename)
+      // let svgBody = await result.text()
+      // console.log(svgBody)
+      // let svg = document.createElement('div')
+      // svg.innerHTML = svgBody
+
+      // let svg = document.createElement('object')
+      // return new Promise<Element>(resolve => {
+      //   svg.onerror = (e) => console.log(e)
+      //   svg.onload = () => {
+      //     if (typeof id === 'undefined') {
+      //       resolve(svg)
+      //     } else {
+      //       let svgDoc = svg.contentDocument
+      //       let idElem = svgDoc.querySelector('#'+id)
+      //       resolve(idElem)
+      //     }
+      //   }
+      //   svg.type = 'image/svg+xml'
+      //   svg.data = filename
+      // })
+    }
+
+    case 'json': {
+      let result = await fetch(filename)
+      let path = filename.substr(0, filename.lastIndexOf('/') + 1)
+      let tileset = JSON.parse(await result.text())
+      let sheetname = path + tileset.meta.image
+      let info = tileset.frames[id ? id : 0]
+      let frame = info.frame
+      let imageSize = tileset.meta.size
+
+      let div = document.createElement('div')
+      div.id = card
+      let newW = imageSize.w*data.w/frame.w
+      let newH = imageSize.h*data.h/frame.h
+      let newX = -frame.x*data.w/frame.w
+      let newY = -frame.y*data.h/frame.h
+      div.setAttribute('style', `background-position:${newX}px ${newY}px; background-size:${newW}px ${newH}px; width:${data.w}px; height:${data.h}px; background-image:url('${sheetname}')`)
+      return div
+
+      // Although we have clipped the region, we have not changed the position
+      // or size of the element. Maybe try the backgroundImage, we can position
+      // and even colour it
+      // let img = document.createElement('img')
+      // img.id = imagename
+      // img.src = path + tileset.meta.image
+      //
+      // if (!img.complete) {
+      //   await new Promise(resolve => img.onload = resolve)
+      // }
+      //
+      // let info = tileset.frames[id ? id : 0]
+      // let frame = info.frame
+      // // let clip = `rect(${frame.y}px ${frame.x + frame.w}px ${frame.y + frame.h}px ${frame.x}px)`
+      // // img.setAttribute('style', 'position:absolute;clip:'+clip)
+      // let clipPath = `inset(${frame.y}px ${img.width - frame.x - frame.w}px ${img.height - frame.y - frame.h}px ${frame.x}px)`
+      // img.setAttribute('style', 'clip-path:'+clipPath)
+      // return img
+    }
+  }
+}
+
+async function loadImages() {
+  let w = 300
+  let h = 400
+  document.body.appendChild(await getCardImage('c1', {image:'/assets/frog.jpg', w, h}))
+  document.body.appendChild(await getCardImage('c2', {image:'/assets/animate-bird-slide-25.gif', w, h}))
+  document.body.appendChild(await getCardImage('c3', {image:'/assets/test01.svg#card-front', w, h}))
+  document.body.appendChild(await getCardImage('c4', {image:'/assets/test02.svg', w, h}))
+  document.body.appendChild(await getCardImage('c5', {image:'/assets/spritesheet.json#test02.svg', w, h}))
+}
+
+loadImages()
