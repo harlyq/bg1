@@ -338,107 +338,50 @@ async function getCardImage(card, data): Promise<Element> {
   let image = data.image.replace(/\\/g, '/')
   let [filename, id] = image.split('#')
   let ext = filename.substr(filename.lastIndexOf('.') + 1)
+  let w = data.w
+  let h = data.h
 
   switch (ext) {
-    // default: {
-    //   let img = document.createElement('img')
-    //   img.id = imagename
-    //   img.src = filename
-    //   // setAttributes(elem, {id: image, src: filename})
-    //   return img
-    // }
-
-    // case 'svg': {
-    default: {
-      let div = document.createElement('div')
-      div.id = card
-      div.setAttribute('style', `background-size:${data.w}px ${data.h}px; width:${data.w}px; height:${data.h}px; background-image:url('${image}')`)
-      return div
-
-      // if (typeof id === 'undefined') {
-      //   let svg = document.createElement('object')
-      //   svg.type = 'image/svg+xml'
-      //   svg.data = filename
-      //   return svg
-      // } else {
-      //   let svg = document.createElementNS("http://www.w3.org/2000/svg", "svg")
-      //   svg.innerHTML = `<use href='${image}'></use>`
-      //   return svg
-      // }
-
-      // let svg = document.createElement('object')
-      // svg.onerror = (e) => console.log('error:' + e)
-      // svg.onload = (e) => console.log('load:' + e)
-      // svg.type = 'image/svg+xml'
-      // svg.data = filename
-      // return svg
-
-      // let result = await fetch(filename)
-      // let svgBody = await result.text()
-      // console.log(svgBody)
-      // let svg = document.createElement('div')
-      // svg.innerHTML = svgBody
-
-      // let svg = document.createElement('object')
-      // return new Promise<Element>(resolve => {
-      //   svg.onerror = (e) => console.log(e)
-      //   svg.onload = () => {
-      //     if (typeof id === 'undefined') {
-      //       resolve(svg)
-      //     } else {
-      //       let svgDoc = svg.contentDocument
-      //       let idElem = svgDoc.querySelector('#'+id)
-      //       resolve(idElem)
-      //     }
-      //   }
-      //   svg.type = 'image/svg+xml'
-      //   svg.data = filename
-      // })
-    }
-
     case 'json': {
       let result = await fetch(filename)
-      let path = filename.substr(0, filename.lastIndexOf('/') + 1)
+      console.assert(result.ok, `unable to load tilesheet '${filename}'`)
       let tileset = JSON.parse(await result.text())
-      let sheetname = path + tileset.meta.image
+      console.assert(typeof tileset.meta !== 'undefined', `no meta in tilesheet '${filename}'`)
+      console.assert(typeof tileset.frames !== 'undefined', `no frames in tilesheet '${filename}'`)
+      console.assert(Object.keys(tileset.frames).length > 0, `no frames in tilesheet '${filename}'`)
+      console.assert(tileset.frames[id ? id : 0], `frame '${id}' not found in tilesheet '${filename}'`)
+
+      let path = filename.substr(0, filename.lastIndexOf('/') + 1)
       let info = tileset.frames[id ? id : 0]
       let frame = info.frame
       let imageSize = tileset.meta.size
+      let bw = imageSize.w*w/frame.w
+      let bh = imageSize.h*h/frame.h
+      let x = -frame.x*w/frame.w
+      let y = -frame.y*h/frame.h
+
+      image = path + tileset.meta.image
 
       let div = document.createElement('div')
+      div.className = 'game-card'
       div.id = card
-      let newW = imageSize.w*data.w/frame.w
-      let newH = imageSize.h*data.h/frame.h
-      let newX = -frame.x*data.w/frame.w
-      let newY = -frame.y*data.h/frame.h
-      div.setAttribute('style', `background-position:${newX}px ${newY}px; background-size:${newW}px ${newH}px; width:${data.w}px; height:${data.h}px; background-image:url('${sheetname}')`)
+      div.setAttribute('style', `background-position:${x}px ${y}px; background-size:${bw}px ${bh}px; width:${w}px; height:${h}px; background-image:url('${image}')`)
       return div
+    }
 
-      // Although we have clipped the region, we have not changed the position
-      // or size of the element. Maybe try the backgroundImage, we can position
-      // and even colour it
-      // let img = document.createElement('img')
-      // img.id = imagename
-      // img.src = path + tileset.meta.image
-      //
-      // if (!img.complete) {
-      //   await new Promise(resolve => img.onload = resolve)
-      // }
-      //
-      // let info = tileset.frames[id ? id : 0]
-      // let frame = info.frame
-      // // let clip = `rect(${frame.y}px ${frame.x + frame.w}px ${frame.y + frame.h}px ${frame.x}px)`
-      // // img.setAttribute('style', 'position:absolute;clip:'+clip)
-      // let clipPath = `inset(${frame.y}px ${img.width - frame.x - frame.w}px ${img.height - frame.y - frame.h}px ${frame.x}px)`
-      // img.setAttribute('style', 'clip-path:'+clipPath)
-      // return img
+    default: {
+      let div = document.createElement('div')
+      div.className = 'game-card'
+      div.id = card
+      div.setAttribute('style', `background-size:${w}px ${h}px; width:${w}px; height:${h}px; background-image:url('${image}')`)
+      return div
     }
   }
 }
 
 async function loadImages() {
-  let w = 300
-  let h = 400
+  let w = 500
+  let h = 600
   document.body.appendChild(await getCardImage('c1', {image:'/assets/frog.jpg', w, h}))
   document.body.appendChild(await getCardImage('c2', {image:'/assets/animate-bird-slide-25.gif', w, h}))
   document.body.appendChild(await getCardImage('c3', {image:'/assets/test01.svg#card-front', w, h}))
