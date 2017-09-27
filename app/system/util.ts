@@ -291,24 +291,24 @@ export class Util {
     }
   }
 
-  public static mergeJSON(base: any, src: any) {
-    if (typeof src === 'undefined') {
-      return base
-    } else if (src === null || typeof(src) !== 'object') {
-      return src
-    } else if (!base) {
-      base = Array.isArray(src) ? [] : {}
+  public static mergeJSON(a: any, b: any) {
+    if (typeof a !== typeof b) {
+      return typeof (a) === 'undefined' ? b : a
+    } else if (typeof a !== 'object') {
+      return b
     }
 
-    if (Array.isArray(src)) {
-      const n = src.length
+    if (Array.isArray(a) && Array.isArray(b)) {
+      const n = Math.max(a.length, b.length)
+      let base = []
       for (let i = 0; i < n; ++i) {
-        base[i] = Util.mergeJSON(base[i], src[i])
+        base[i] = Util.mergeJSON(a[i], b[i])
       }
       return base
     } else {
-      for (let key in src) {
-        base[key] = Util.mergeJSON(base[key], src[key])
+      let base = {}
+      for (let key of Util.arrayUnion(Object.keys(a), Object.keys(b))) {
+        base[key] = Util.mergeJSON(a[key], b[key])
       }
       return base
     }

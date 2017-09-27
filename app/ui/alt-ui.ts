@@ -257,8 +257,8 @@ gs.createLocation('hand', {x: 10, y: 230, w: 200, h: 100, style: LocationStyle.F
 
 gs.createCard('c?', {image:'/assets/card-back.jpg', w: 60, h: 80}) // card back
 gs.createCard('c1', {image:'/assets/spritesheet.json#test01.svg', w: 60, h: 80})
-gs.createCard('c2', {image:'/assets/test02.svg', w: 60, h: 80})
-gs.createCard('c3', {image:'/assets/frog.jpg', w: 60, h: 80})
+gs.createCard('c2', {image:'/assets/frog.jpg', w: 60, h: 80})
+gs.createCard('c3', {image:'/assets/test02.svg#rect817-view', w: 60, h: 80}) // rect817 must have a viewBox
 gs.createCard('c4', {image:'/assets/animate-bird-slide-25.gif', w: 60, h: 80})
 
 gs.addCard('deck', 'c?')
@@ -279,19 +279,19 @@ function demoMoveCard() {
     gs.moveCard('deck', gs.getCardCount('deck') - 1, 'discard', moveIndex, moveList[moveIndex])
     moveIndex++
     gs.render(content)
-    setTimeout(demoMoveCard, 2000)
+    //setTimeout(demoMoveCard, 2000)
   } else if (move2Index < move2List.length) {
     const card = move2List[move2Index]
     const index = gs.getCards('discard').indexOf(card)
     gs.moveCard('discard', index, 'hand', 0, 'c?')
     move2Index++
     gs.render(content)
-    setTimeout(demoMoveCard, 2000)
+    //setTimeout(demoMoveCard, 2000)
   }
 }
 
-setTimeout(demoMoveCard, 2000)
-
+//setTimeout(demoMoveCard, 2000)
+document.querySelector("#test").addEventListener("click", demoMoveCard)
 
 let data = {value: 'hi', name: 'blah'}
 const r = /}}|{{|{(\w+)}/g
