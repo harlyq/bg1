@@ -46,34 +46,117 @@ interface IPlayer {
 
 }
 
+interface IPick {
+  type: 'PickCards'|'PickLocations'|'PickPlayers'|'Pick'
+  who: string
+  options: string[]
+  count: [number, number] // [min, max]
+}
+
+const CARD_PREFIX = '_card'
+const CARD_PREFIX_LENGTH = CARD_PREFIX.length
+
+function keyToCard(key: number): string {
+  return CARD_PREFIX + key
+}
+
+function cardToKey(card: string): number {
+  return parseInt(card.substr(CARD_PREFIX_LENGTH))
+}
+
+function isCard(card: string): boolean {
+  return card.substr(0, CARD_PREFIX_LENGTH) === CARD_PREFIX
+}
+
+// returns [min, max] for this count. If count is a single number then 'min' and
+// 'max' are the same. If a count is -1 then the 'maxValue' is used
+// examples:
+// parsePickCount([0,6],6) => [0,6]
+// parsePickCount([1],7) => [1,1]
+// parsePickCount(3,2) => [2,2] // limit to maxValue
+// parsePickCount(-1,3) => [3,3] // replace -1 with maxValue
+function parsePickCount(count: number | number[], maxValue: number): number[] {
+  let min, max
+
+  if (typeof count === "number") {
+    min = max = count
+  } else if (Array.isArray(count)) {
+    if (count.length > 1) {
+      min = count[0]
+      max = count[1]
+    } else if (count.length > 0) {
+      min = max = count[0]
+    }
+  } else {
+    console.assert(false, `unknown count type '${count}'`)
+  }
+
+  min = (typeof min === 'undefined' || min === -1) ? maxValue : Math.min(min, maxValue)
+  max = (typeof max === 'undefined' || max === -1) ? maxValue : Math.min(max, maxValue)
+
+  if (min > max) {
+    [min, max] = [max, min] // swap
+  }
+
+  return [min, max]
+}
+
+let game: GameStruct
+
 const ViewCard = {
   view: (vnode) => {
-    const isFaceUp = vnode.attrs.faceUp
+    const card = vnode.attrs.name
+    const id = keyToCard(vnode.attrs.key)
+    let classes = 'card'
+    if (game.isSelected(id)) {
+      classes = 'card-selected'
+    } else if (game.isPicked(id)) {
+      classes = 'card-picked'
+    }
+
     return (
-      m('div.card', vnode.attrs, vnode.attrs.name) // TODO need to ensure id is unique
+      m(`div.${classes}#${id}`, vnode.attrs, card) // TODO need to ensure id is unique
     )
   }
 }
 
 const ViewLocation = {
   view: (vnode) => {
+    const location = vnode.attrs.name
+    const id = vnode.attrs.name
+    let classes = 'location'
+    if (game.isSelected(location)) {
+      classes = 'location-selected'
+    } else if (game.isPicked(location)) {
+      classes = 'location-picked'
+    }
+
     return (
-      m('div.location#' + vnode.attrs.name, vnode.attrs, '')
+      m(`div.${classes}#${id}`, vnode.attrs, '')
     )
   }
 }
 
 const ViewPlayer = {
   view: (vnode) => {
+    const player = vnode.attrs.name
+    const id = vnode.attrs.name
+    let classes = 'player'
+    if (game.isSelected(player)) {
+      classes = 'player-selected'
+    } else if (game.isPicked(player)) {
+      classes = 'player-picked'
+    }
+
     return (
-      m('div.player#' + vnode.attrs.name, vnode.attrs, '')
+      m(`div.${classes}#${id}`, vnode.attrs, '')
     )
   }
 }
 
 const ViewGame = {
   view: (vnode) => {
-    const game: GameStruct = vnode.attrs.game
+    game = vnode.attrs.game
 
     // build up the card list from all of the cards that have been placed on locations
     let cards = []
@@ -82,14 +165,14 @@ const ViewGame = {
       const n = iLocation.cardKeys.length
       iLocation.cardKeys.forEach((key, i) => {
         let card = game.allCardKeys[key]
-        cards.push( m( ViewCard, {name: key, key: key, ...game.getCardAttrs(card, location, i, n)} ) )
+        cards.push( m( ViewCard, {name: card, key, ...game.getCardAttrs(card, location, i, n)} ) )
       })
       cards.sort((a,b) => a.key - b.key)
     })
 
     // use absolute positioning and z-index for everything, no nesting means faster rendering
     return (
-      m('div.game', {},
+      m('div.game', {onclick: (e) => game.toggleSelect(e.target.id)},
         Object.keys(game.allPlayers).map(player => m( ViewPlayer, {name: player} )),
         Object.keys(game.allLocations).map(location => m( ViewLocation, {name: location, ...game.getLocationAttrs(location)} )),
         cards,
@@ -150,6 +233,10 @@ class GameStruct {
   allLocations: {[name: string]: ILocation} = {} // each location contains a number of unique keys
   allPlayers: {[name: string]: IPlayer} = {}
   uniqueKey: number = 0
+
+  pickWho: string = ''
+  pickPicks: IPick[] = []
+  selects: string[] = []
 
   // one card can be added to multiple locations (e.g. card backs), but this
   // data will affect all cards with that name
@@ -248,6 +335,113 @@ class GameStruct {
   public render(elem) {
     m.render(elem, m(ViewGame, {game: gs}))
   }
+
+  private findLocation(cardKey: number): string {
+    for (let location in this.allLocations) {
+      const iLocation = this.allLocations[location]
+      const i = iLocation.cardKeys.indexOf(cardKey)
+      if (i !== -1) {
+        return location + ':' + i.toString()
+      }
+    }
+    return ''
+  }
+
+  private translateOptions(options: string[]): string[] {
+    return options.map(option => {
+      let parts = option.split(':')
+      let result = option
+
+      if (parts.length === 2) {
+        // replace 'location:X' with a cardKey
+        const iLocation = this.allLocations[parts[0]]
+        const index = parseInt(parts[1])
+        console.assert(typeof iLocation !== 'undefined', `unable to find location '${location}' from '${option}'`)
+        console.assert(!isNaN(index), `unable to find index value in '${option}', expecting <location>:<index>`)
+        console.assert(index < iLocation.cardKeys.length, `unable to get index '${index}' from ${iLocation.cardKeys.length} cards`)
+        result = keyToCard(iLocation.cardKeys[index])
+      } else if (isCard(option)) {
+        // replauce a cardKey with 'location:X'
+        const id = cardToKey(option)
+        console.assert(!isNaN(id), `invalid card name '${option}'`)
+        result = this.findLocation(id)
+      }
+
+      console.assert(result.length > 0, `unable to find location of '${option}'`)
+      return result
+    })
+  }
+
+  public pick(picks: IPick[]) {
+    console.assert(picks.length > 0)
+    console.assert(picks.every(pick => pick.who === picks[0].who))
+    console.assert(picks.every(pick => pick.options.length >= pick.count[1]))
+    console.assert(picks.every(pick => pick.count[0] <= pick.count[1] && pick.count[0] >= 0))
+
+    picks.forEach(pick => pick.options = this.translateOptions(pick.options))
+
+    this.pickWho = picks[0].who
+    this.pickPicks = picks
+    this.selects = []
+  }
+
+  public isPicked(name: string): boolean {
+    return this.pickPicks.some(pick => pick.options.indexOf(name) !== -1)
+  }
+
+  public isSelected(name: string): boolean {
+    return this.selects.indexOf(name) !== -1
+  }
+
+  public toggleSelect(name: string): boolean {
+    let possibles = this.selects.slice()
+    const i = possibles.indexOf(name)
+    if (i == -1) {
+      possibles.push(name)
+    } else {
+      possibles.splice(i, 1)
+    }
+
+    const n = possibles.length
+    if (possibles.length > 0 && !this.pickPicks.some(pick => n <= pick.count[1] && possibles.every(x => pick.options.indexOf(x) !== -1))) {
+      return false
+    }
+
+    this.selects = possibles
+    if (this.isOnlyOption()) {
+      this.commit()
+    }
+
+    this.render(content) // HACK
+  }
+
+  public isOnlyOption(): boolean {
+    if (this.selects.length !== 1) {
+      return false
+    }
+
+    return this.pickPicks.some(pick => pick.count[0] === 1 && pick.count[1] === 1 && pick.options.indexOf(this.selects[0]) !== -1)
+  }
+
+  public canCommit(): boolean {
+    if (this.pickPicks.length === 0) {
+      return false
+    }
+
+    const n = this.selects.length
+    return this.pickPicks.some(pick => n >= pick.count[0] && n <= pick.count[1] && this.selects.every(x => pick.options.indexOf(x) !== -1))
+  }
+
+  public commit() {
+    console.assert(this.canCommit())
+    const results = this.translateOptions(this.selects)
+
+    this.pickWho = ''
+    this.pickPicks = []
+    this.selects = []
+
+    this.render(content) // HACK
+  }
 }
 
 let gs = new GameStruct()
@@ -258,7 +452,7 @@ gs.createLocation('hand', {x: 10, y: 230, w: 200, h: 100, style: LocationStyle.F
 gs.createCard('c?', {image:'/assets/card-back.jpg', w: 60, h: 80}) // card back
 gs.createCard('c1', {image:'/assets/spritesheet.json#test01.svg', w: 60, h: 80})
 gs.createCard('c2', {image:'/assets/frog.jpg', w: 60, h: 80})
-gs.createCard('c3', {image:'/assets/test02.svg#rect817-view', w: 60, h: 80}) // rect817 must have a viewBox
+gs.createCard('c3', {image:'/assets/test02.svg#rect817-view', w: 60, h: 80}) // special view created for rect817
 gs.createCard('c4', {image:'/assets/animate-bird-slide-25.gif', w: 60, h: 80})
 
 gs.addCard('deck', 'c?')
@@ -279,23 +473,29 @@ function demoMoveCard() {
     gs.moveCard('deck', gs.getCardCount('deck') - 1, 'discard', moveIndex, moveList[moveIndex])
     moveIndex++
     gs.render(content)
-    //setTimeout(demoMoveCard, 2000)
   } else if (move2Index < move2List.length) {
     const card = move2List[move2Index]
     const index = gs.getCards('discard').indexOf(card)
     gs.moveCard('discard', index, 'hand', 0, 'c?')
     move2Index++
     gs.render(content)
-    //setTimeout(demoMoveCard, 2000)
   }
 }
 
-//setTimeout(demoMoveCard, 2000)
-document.querySelector("#test").addEventListener("click", demoMoveCard)
+let demoPickIndex = 0
+function demoPick() {
+  if (demoPickIndex == 0) {
+    gs.pick([{type: 'Pick', who: 'a', options: ['deck:0','deck:1','deck:3'], count: [1,2]}])
+  }
+  demoPickIndex++
+  gs.render(content)
+}
+
+document.querySelector("#test").addEventListener("click", demoPick)
 
 let data = {value: 'hi', name: 'blah'}
 const r = /}}|{{|{(\w+)}/g
-function parse(str, data) {
+function parseTemplate(str, data) {
   return str.replace(r, (match, attr) => {
     switch(match) {
       case '{{': return '{'
@@ -314,7 +514,7 @@ function makeCard(data) {
 {
   let draw = SVG('content').size(500,500)//.rotate(10, 0, 0)
   let rect = draw.rect(100, 100).stroke('#006').fill('#ffc')
-  let text = draw.text(parse('{value} {name}', data)).center(100, 100).font({size: 80})
+  let text = draw.text(parseTemplate('{value} {name}', data)).center(100, 100).font({size: 80})
   draw.rotate(10, 0, 0)
 
   let svgObject = document.querySelector("#svgObject") as any
@@ -351,22 +551,25 @@ function setAttributes(elem: HTMLElement, data: any) {
 // spritesheet.json#card-back.jpg
 // spritesheet.json#bird-1.jpg
 // card-back.jpg
-let tilesetCache = {}
-let fetchCache = {}
-function getTileset(filename: string): {[key: string]: any} {
-  if (tilesetCache[filename]) {
-    return tilesetCache[filename]
+let getJSONFromFile = (() => {
+  let jsonCache = {}
+  let fetchCache = {}
+
+  return function(filename: string): {[key: string]: any} {
+    if (jsonCache[filename]) {
+      return jsonCache[filename]
+    }
+    if (fetchCache[filename]) {
+      return {}
+    }
+    fetchCache[filename] = fetch(filename)
+      .then(result => result.text())
+      .then(json => {
+        jsonCache[filename] = JSON.parse(json)
+        gs.render(content) // hack
+      })
   }
-  if (fetchCache[filename]) {
-    return {}
-  }
-  fetchCache[filename] = fetch(filename)
-    .then(result => result.text())
-    .then(json => {
-      tilesetCache[filename] = JSON.parse(json)
-      gs.render(content) // hack
-    })
-}
+})()
 
 function calcImageAttrs(data) {
   if (typeof data['image'] !== 'string') {
@@ -382,7 +585,7 @@ function calcImageAttrs(data) {
 
   switch (ext) {
     case 'json': {
-      let tileset = getTileset(filename)
+      let tileset = getJSONFromFile(filename)
       if (tileset) {
         let path = filename.substr(0, filename.lastIndexOf('/') + 1)
         let info = tileset.frames[id ? id : 0]

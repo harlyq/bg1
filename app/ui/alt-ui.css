@@ -3,16 +3,64 @@
 }
 
 .card {
+  /*pointer-events: none;*/
   position: absolute;
   background-color: #ffa;
   outline: 1px solid #cc8;
   transition: transform 0.5s;
 }
 
+.card-picked {
+  position: absolute;
+  background-color: green;
+  outline: 4px solid darkGreen;
+  transition: transform 0.5s;
+}
+
+/*used to tint the color of a card*/
+.card-picked::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,255,0,0.3)
+}
+
+.card-selected {
+  position: absolute;;
+  background-color: red;
+  outline: 4px solid darkRed;
+  transition: transform 0.5s;
+}
+
+/*used to tint the color of a card*/
+.card-selected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255,0,0,0.3)
+}
+
+
 .location {
+  /*pointer-events: none;*/
   position: absolute;
   background-color: lightBlue;
   outline: 1px solid blue;
+}
+
+.game {
+  user-select: none; /* prevents selecting text */
+  cursor: default; /* prevents editing caret over text */
 }
 
 tspan {
