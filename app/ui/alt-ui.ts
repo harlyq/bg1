@@ -8,6 +8,8 @@ import {Util} from '../system/util'
 //   DONT_CARE
 // }
 
+type PickStatus = '' | 'Pickable' | 'Picked'
+
 enum LocationStyle {
   FAN,
 }
@@ -28,6 +30,8 @@ interface ICard {
   w?: number
   h?: number
   image?: string
+  imagePickable?: string
+  imagePicked?: string
 }
 
 interface ILocation {
@@ -40,6 +44,9 @@ interface ILocation {
   style: LocationStyle
   xAlign: LocationAlign
   yAlign: LocationAlign
+  image?: string
+  imagePickable?: string
+  imagePicked?: string
 }
 
 interface IPlayer {
@@ -107,15 +114,18 @@ const ViewCard = {
   view: (vnode) => {
     const card = vnode.attrs.name
     const id = keyToCard(vnode.attrs.key)
-    let classes = 'card'
-    if (game.isSelected(id)) {
-      classes = 'card-selected'
-    } else if (game.isPicked(id)) {
-      classes = 'card-picked'
+    let status: any = ''
+    if (game.isPicked(id)) {
+      status = 'Picked'
+    } else if (game.isPickable(id)) {
+      status = 'Pickable'
     }
+    const classes = 'card' + (status ? '-' + status.toLowerCase() : '')
+
+    const attrs = game.getCardAttrs(card, vnode.attrs.location, vnode.attrs.i, vnode.attrs.n, status)
 
     return (
-      m(`div.${classes}#${id}`, vnode.attrs, card) // TODO need to ensure id is unique
+      m(`div.${classes}#${id}`, attrs, card) // TODO need to ensure id is unique
     )
   }
 }
@@ -124,15 +134,17 @@ const ViewLocation = {
   view: (vnode) => {
     const location = vnode.attrs.name
     const id = vnode.attrs.name
-    let classes = 'location'
-    if (game.isSelected(location)) {
-      classes = 'location-selected'
-    } else if (game.isPicked(location)) {
-      classes = 'location-picked'
+    let status: any = ''
+    if (game.isPicked(id)) {
+      status = 'Picked'
+    } else if (game.isPickable(id)) {
+      status = 'Pickable'
     }
+    const classes = 'location' + (status ? '-' + status.toLowerCase() : '')
+    const attrs = game.getLocationAttrs(location, status)
 
     return (
-      m(`div.${classes}#${id}`, vnode.attrs, '')
+      m(`div.${classes}#${id}`, attrs, '')
     )
   }
 }
@@ -142,8 +154,8 @@ const ViewPlayer = {
     const player = vnode.attrs.name
     const id = vnode.attrs.name
     let classes = 'player'
-    if (game.isSelected(player)) {
-      classes = 'player-selected'
+    if (game.isPickable(player)) {
+      classes = 'player-pickable'
     } else if (game.isPicked(player)) {
       classes = 'player-picked'
     }
@@ -165,16 +177,16 @@ const ViewGame = {
       const n = iLocation.cardKeys.length
       iLocation.cardKeys.forEach((key, i) => {
         let card = game.allCardKeys[key]
-        cards.push( m( ViewCard, {name: card, key, ...game.getCardAttrs(card, location, i, n)} ) )
+        cards.push( m( ViewCard, {name: card, key, location, i, n} ) )
       })
       cards.sort((a,b) => a.key - b.key)
     })
 
     // use absolute positioning and z-index for everything, no nesting means faster rendering
     return (
-      m('div.game', {onclick: (e) => game.toggleSelect(e.target.id)},
+      m('div.game', {onclick: (e) => game.togglePicked(e.target.id)},
         Object.keys(game.allPlayers).map(player => m( ViewPlayer, {name: player} )),
-        Object.keys(game.allLocations).map(location => m( ViewLocation, {name: location, ...game.getLocationAttrs(location)} )),
+        Object.keys(game.allLocations).map(location => m( ViewLocation, {name: location} )),
         cards,
       )
     )
@@ -235,8 +247,8 @@ class GameStruct {
   uniqueKey: number = 0
 
   pickWho: string = ''
-  pickPicks: IPick[] = []
-  selects: string[] = []
+  pickOptions: IPick[] = []
+  pickResults: string[] = []
 
   // one card can be added to multiple locations (e.g. card backs), but this
   // data will affect all cards with that name
@@ -295,22 +307,23 @@ class GameStruct {
     this.allCards[newCard] = Util.mergeJSON(this.allCards[newCard], newData)
   }
 
-  public getCardAttrs(card: string, location: string, i: number, n: number): {[key: string]: any} {
+  public getCardAttrs(card: string, location: string, i: number, n: number, status: PickStatus): {[key: string]: any} {
     const iCard = this.allCards[card]
     console.assert(typeof iCard !== 'undefined')
     const iLocation = this.allLocations[location]
     console.assert(typeof iLocation !== 'undefined')
 
     let attrs = calcCardPositionAttrs(iCard, iLocation, i, n)
-    attrs = Util.mergeJSON(attrs, calcImageAttrs(iCard))
+    attrs = Util.mergeJSON(attrs, calcImageAttrs(iCard, status))
     return attrs
   }
 
-  public getLocationAttrs(location: string): {[key: string]: any} {
+  public getLocationAttrs(location: string, status: PickStatus): {[key: string]: any} {
     const iLocation = this.allLocations[location]
     console.assert(typeof iLocation !== 'undefined')
 
     let attrs = calcLocationPositionAttrs(iLocation)
+    attrs = Util.mergeJSON(attrs, calcImageAttrs(iLocation, status))
     return attrs
   }
 
@@ -381,20 +394,20 @@ class GameStruct {
     picks.forEach(pick => pick.options = this.translateOptions(pick.options))
 
     this.pickWho = picks[0].who
-    this.pickPicks = picks
-    this.selects = []
+    this.pickOptions = picks
+    this.pickResults = []
+  }
+
+  public isPickable(name: string): boolean {
+    return this.pickOptions.some(pick => pick.options.indexOf(name) !== -1)
   }
 
   public isPicked(name: string): boolean {
-    return this.pickPicks.some(pick => pick.options.indexOf(name) !== -1)
+    return this.pickResults.indexOf(name) !== -1
   }
 
-  public isSelected(name: string): boolean {
-    return this.selects.indexOf(name) !== -1
-  }
-
-  public toggleSelect(name: string): boolean {
-    let possibles = this.selects.slice()
+  public togglePicked(name: string): boolean {
+    let possibles = this.pickResults.slice()
     const i = possibles.indexOf(name)
     if (i == -1) {
       possibles.push(name)
@@ -403,11 +416,11 @@ class GameStruct {
     }
 
     const n = possibles.length
-    if (possibles.length > 0 && !this.pickPicks.some(pick => n <= pick.count[1] && possibles.every(x => pick.options.indexOf(x) !== -1))) {
+    if (possibles.length > 0 && !this.pickOptions.some(pick => n <= pick.count[1] && possibles.every(x => pick.options.indexOf(x) !== -1))) {
       return false
     }
 
-    this.selects = possibles
+    this.pickResults = possibles
     if (this.isOnlyOption()) {
       this.commit()
     }
@@ -416,29 +429,29 @@ class GameStruct {
   }
 
   public isOnlyOption(): boolean {
-    if (this.selects.length !== 1) {
+    if (this.pickResults.length !== 1) {
       return false
     }
 
-    return this.pickPicks.some(pick => pick.count[0] === 1 && pick.count[1] === 1 && pick.options.indexOf(this.selects[0]) !== -1)
+    return this.pickOptions.some(pick => pick.count[0] === 1 && pick.count[1] === 1 && pick.options.indexOf(this.pickResults[0]) !== -1)
   }
 
   public canCommit(): boolean {
-    if (this.pickPicks.length === 0) {
+    if (this.pickOptions.length === 0) {
       return false
     }
 
-    const n = this.selects.length
-    return this.pickPicks.some(pick => n >= pick.count[0] && n <= pick.count[1] && this.selects.every(x => pick.options.indexOf(x) !== -1))
+    const n = this.pickResults.length
+    return this.pickOptions.some(pick => n >= pick.count[0] && n <= pick.count[1] && this.pickResults.every(x => pick.options.indexOf(x) !== -1))
   }
 
   public commit() {
     console.assert(this.canCommit())
-    const results = this.translateOptions(this.selects)
+    const results = this.translateOptions(this.pickResults)
 
     this.pickWho = ''
-    this.pickPicks = []
-    this.selects = []
+    this.pickOptions = []
+    this.pickResults = []
 
     this.render(content) // HACK
   }
@@ -449,7 +462,7 @@ gs.createLocation('deck', {x: 10, y: 10, w: 200, h: 100, style: LocationStyle.FA
 gs.createLocation('discard', {x: 10, y: 120, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
 gs.createLocation('hand', {x: 10, y: 230, w: 200, h: 100, style: LocationStyle.FAN, xAlign: LocationAlign.FROM_START, yAlign: LocationAlign.CENTER})
 
-gs.createCard('c?', {image:'/assets/card-back.jpg', w: 60, h: 80}) // card back
+gs.createCard('c?', {image:'/assets/card-back.jpg', imagePickable: '/assets/spritesheet.json#test01.svg', w: 60, h: 80}) // card back
 gs.createCard('c1', {image:'/assets/spritesheet.json#test01.svg', w: 60, h: 80})
 gs.createCard('c2', {image:'/assets/frog.jpg', w: 60, h: 80})
 gs.createCard('c3', {image:'/assets/test02.svg#rect817-view', w: 60, h: 80}) // special view created for rect817
@@ -486,6 +499,11 @@ let demoPickIndex = 0
 function demoPick() {
   if (demoPickIndex == 0) {
     gs.pick([{type: 'Pick', who: 'a', options: ['deck:0','deck:1','deck:3'], count: [1,2]}])
+  } else if (demoPickIndex === 1) {
+    gs.moveCard('deck', 3, 'discard', moveIndex, 'c1')
+    gs.moveCard('deck', 2, 'discard', moveIndex, 'c3')
+  } else if (demoPickIndex === 2) {
+    gs.pick([{type: 'Pick', who: 'b', options: ['deck', 'discard'], count: [1,2]}])
   }
   demoPickIndex++
   gs.render(content)
@@ -512,10 +530,10 @@ function makeCard(data) {
 
 
 {
-  let draw = SVG('content').size(500,500)//.rotate(10, 0, 0)
-  let rect = draw.rect(100, 100).stroke('#006').fill('#ffc')
-  let text = draw.text(parseTemplate('{value} {name}', data)).center(100, 100).font({size: 80})
-  draw.rotate(10, 0, 0)
+  // let draw = SVG('content').size(500,500)//.rotate(10, 0, 0)
+  // let rect = draw.rect(100, 100).stroke('#006').fill('#ffc')
+  // let text = draw.text(parseTemplate('{value} {name}', data)).center(100, 100).font({size: 80})
+  // draw.rotate(10, 0, 0)
 
   let svgObject = document.querySelector("#svgObject") as any
   let svgDoc = svgObject.contentDocument
@@ -559,24 +577,29 @@ let getJSONFromFile = (() => {
     if (jsonCache[filename]) {
       return jsonCache[filename]
     }
-    if (fetchCache[filename]) {
-      return {}
+
+    if (!fetchCache[filename]) {
+      fetchCache[filename] = fetch(filename)
+        .then(result => result.text())
+        .then(json => {
+          jsonCache[filename] = JSON.parse(json)
+          gs.render(content) // hack
+        })
     }
-    fetchCache[filename] = fetch(filename)
-      .then(result => result.text())
-      .then(json => {
-        jsonCache[filename] = JSON.parse(json)
-        gs.render(content) // hack
-      })
   }
 })()
 
-function calcImageAttrs(data) {
-  if (typeof data['image'] !== 'string') {
+function calcImageAttrs(data, status: PickStatus) {
+  let imageType = 'image' + status
+  if (status !== '' && typeof data[imageType] !== 'string') {
+    imageType = 'image'
+  }
+
+  if (typeof data[imageType] !== 'string') {
     return {}
   }
 
-  let image = data.image.replace(/\\/g, '/')
+  let image = data[imageType].replace(/\\/g, '/')
   let [filename, id] = image.split('#')
   let ext = filename.substr(filename.lastIndexOf('.') + 1)
   let w = data.w

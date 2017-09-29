@@ -3,17 +3,37 @@
 }
 
 .card {
-  /*pointer-events: none;*/
+  pointer-events: none; /* side effect is that we may select a card underneath if the top card is not selectable */
   position: absolute;
   background-color: #ffa;
   outline: 1px solid #cc8;
   transition: transform 0.5s;
 }
 
-.card-picked {
+.card-pickable {
   position: absolute;
   background-color: green;
   outline: 4px solid darkGreen;
+  transition: transform 0.5s;
+}
+
+/*used to tint the color of a card*/
+.card-pickable::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,255,0,0.3)
+}
+
+.card-picked {
+  position: absolute;;
+  background-color: red;
+  outline: 4px solid darkRed;
   transition: transform 0.5s;
 }
 
@@ -27,10 +47,38 @@
   bottom: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0,255,0,0.3)
+  background-color: rgba(255,0,0,0.3)
 }
 
-.card-selected {
+
+.location {
+  pointer-events: none;
+  position: absolute;
+  background-color: lightBlue;
+  outline: 1px solid blue;
+}
+
+.location-pickable {
+  position: absolute;
+  background-color: blue;
+  outline: 4px solid darkBlue;
+  transition: transform 0.5s;
+}
+
+/*used to tint the color of a card*/
+.location-pickable::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,255,0.3)
+}
+
+.location-picked {
   position: absolute;;
   background-color: red;
   outline: 4px solid darkRed;
@@ -38,7 +86,7 @@
 }
 
 /*used to tint the color of a card*/
-.card-selected::after {
+.location-picked::after {
   content: '';
   position: absolute;
   top: 0;
@@ -48,14 +96,6 @@
   width: 100%;
   height: 100%;
   background-color: rgba(255,0,0,0.3)
-}
-
-
-.location {
-  /*pointer-events: none;*/
-  position: absolute;
-  background-color: lightBlue;
-  outline: 1px solid blue;
 }
 
 .game {
