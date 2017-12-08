@@ -2,9 +2,9 @@
 // not from B to A
 export interface Node {
   name: string // name of this sector, corner or edge
-  sectors?: string[] // adjacent sectors, only needed if pieces are placed in sectors
-  corners?: string[] // adjacent corners, only needed if pieces are placed on corners
-  edges?: string[] // adjacent edges, only needed if pieces are placed on edges
+  sectors?: {[key:string]: string} // adjacent sectors, only needed if pieces are placed in sectors (unique)
+  corners?: string[] // adjacent corners, only needed if pieces are placed on corners (unique) TODO should corners be named?
+  edges?: string[] // adjacent edges, only needed if pieces are placed on edges (unique)
   [key: string]: any
 }
 
@@ -53,8 +53,8 @@ export class Graph {
       this.allEdges[x.name] = x
       console.assert((
           typeof(x.sectors) === 'undefined' ||
-          x.sectors.length === 0 ||
-          x.sectors.length === 2
+          Object.keys(x.sectors).length === 0 ||
+          Object.keys(x.sectors).length === 2
         ),
         `sectors '${x.sectors}' must be either empty or have two sectors`
       )
@@ -84,12 +84,13 @@ export class Graph {
           let sectorNode = this.allSectors[sector]
           sectorNode.edges = sectorNode.edges || []
           sectorNode.edges.push(edge)
-          sectorNode.sectors = sectorNode.sectors || []
+          sectorNode.sectors = sectorNode.sectors || {}
 
           for (let otherSector of edgeNode.sectors) {
             if (otherSector !== sector) {
-              if (sectorNode.sectors.indexOf(otherSector) === -1) {
-                sectorNode.sectors.push(otherSector)
+              const sectorList = Object.values(sectorNode.sectors)
+              if (sectorList.indexOf(otherSector) === -1) {
+                sectorNode.sectors[sectorList.length] = otherSector // key by number
               }
             }
           }
@@ -98,7 +99,7 @@ export class Graph {
     }
   }
 
-  public getAdjacentSectors(sectorName: string): string[] {
+  public getAdjacentSectors(sectorName: string): {[key: string]: string} {
     console.assert(typeof this.allSectors[sectorName] !== 'undefined')
     return this.allSectors[sectorName].sectors
   }
@@ -130,7 +131,7 @@ export class Graph {
 
   public getEdgeSectors(edgeName: string): string[] {
     console.assert(typeof this.allEdges[edgeName] !== 'undefined')
-    return this.allEdges[edgeName].sectors
+    return Object.values(this.allEdges[edgeName].sectors)
   }
 
   public getCornerEdges(cornerName: string): string[] {
@@ -140,7 +141,7 @@ export class Graph {
 
   public getCornerSectors(cornerName: string): string[] {
     console.assert(typeof this.allCorners[cornerName] !== 'undefined')
-    return this.allCorners[cornerName].sectors
+    return Object.values(this.allCorners[cornerName].sectors)
   }
 
   // ensure all of the sectors, edges and nodes are linked to each other
@@ -152,7 +153,7 @@ export class Graph {
         for (let edge of node.edges) {
           console.assert(typeof this.allEdges[edge] === 'object', `edge '${edge}' was not added`)
           console.assert(Array.isArray(this.allEdges[edge].sectors), `edge '${edge}' was added but does not have associated sector '${sector}'`)
-          console.assert(this.allEdges[edge].sectors.indexOf(node.name) !== -1, `sector node '${sector}' was not added to this edge '${edge}'`)
+          console.assert(Object.values(this.allEdges[edge].sectors).indexOf(node.name) !== -1, `sector node '${sector}' was not added to this edge '${edge}'`)
         }
       }
 
@@ -160,7 +161,7 @@ export class Graph {
         for (let corner of node.corners) {
           console.assert(typeof this.allCorners[corner] === 'object', `corner '${corner}' was not added`)
           console.assert(Array.isArray(this.allCorners[corner].sectors), `corner '${corner}' was added but does not have associated sector '${sector}'`)
-          console.assert(this.allCorners[corner].sectors.indexOf(node.name) !== -1, `sector node '${sector}' was not added to this corner '${corner}'`)
+          console.assert(Object.values(this.allCorners[corner].sectors).indexOf(node.name) !== -1, `sector node '${sector}' was not added to this corner '${corner}'`)
         }
       }
     }
@@ -172,7 +173,7 @@ export class Graph {
       // but only one of those sectors will mention the edge
       if (node.sectors) {
         let sectorHasThisEdge = false
-        for (let sector of node.sectors) {
+        for (let sector in node.sectors) {
           console.assert(typeof this.allSectors[sector] === 'object', `sector '${sector}' was not added`)
           sectorHasThisEdge = sectorHasThisEdge || (Array.isArray(this.allSectors[sector].edges) && this.allSectors[sector].edges.indexOf(node.name) !== -1)
         }
@@ -191,7 +192,7 @@ export class Graph {
     for (let corner in this.allCorners) {
       let node = this.allCorners[corner]
       if (node.sectors) {
-        for (let sector of node.sectors) {
+        for (let sector in node.sectors) {
           console.assert(typeof this.allSectors[sector] === 'object', `sector '${sector}' was not added`)
           console.assert(Array.isArray(this.allSectors[sector].corners), `sector '${sector}' has added but does not have associated corner '${corner}'`)
           console.assert(this.allSectors[sector].corners.indexOf(node.name) !== -1, `corner node '${corner}' was not added to this sector '${sector}'`)

@@ -6,9 +6,21 @@ import * as seedrandom from 'seedrandom'
 //let fs = require('fs');
 
 
-export interface IPlayer {
+export interface IPlayerData {
+
+}
+
+export interface ILocationData {
+  faceUp?: string[] // TODO remove this
+}
+
+export interface ICardData {
+
+}
+
+interface IPlayer {
   name: string
-  data?: any
+  data?: IPlayerData
 }
 
 interface ICard {
@@ -19,14 +31,6 @@ interface ICard {
 
 interface IDice extends ICard {
   faces: any[]
-}
-
-export interface ILocationData {
-  faceUp?: string[]
-}
-
-export interface ICardData {
-
 }
 
 interface ILocation {
@@ -288,6 +292,10 @@ export class Game {
     return length
   }
 
+  public isCard(cardName: string): boolean {
+    return typeof this.data.allCards[cardName] !== 'undefined'
+  }
+
   public getCardData(cardName: string): any {
     const card = this.data.allCards[cardName]
     console.assert(typeof card !== 'undefined', `unable to find card '${cardName}'`)
@@ -301,6 +309,10 @@ export class Game {
     for (let key in data) {
       card.data[key] = data[key]
     }
+  }
+
+  public isLocation(locationName: string): boolean {
+    return typeof this.data.allLocations[locationName] !== 'undefined'
   }
 
   public getLocationData(locationName: string): any {
@@ -318,14 +330,18 @@ export class Game {
     }
   }
 
+  public isPlayer(playerName: string): boolean {
+    return typeof this.data.allPlayers[playerName] !== 'undefined'
+  }
+
   public getPlayerData(playerName: string): any {
-    const player: IPlayer = this.data.allLocations[playerName]
+    const player: IPlayer = this.data.allPlayers[playerName]
     console.assert(typeof player !== 'undefined', `unable to find player '${playerName}'`)
     return player.data
   }
 
   public mergePlayerData(playerName: string, data: any) {
-    const player: IPlayer = this.data.allLocations[playerName]
+    const player: IPlayer = this.data.allPlayers[playerName]
     console.assert(typeof player !== 'undefined', `unable to find player '${playerName}'`)
     player.data = player.data || {}
     for (let key in data) {
@@ -409,18 +425,16 @@ export class Game {
     return card
   }
 
-  private addPlayerInternal(player: IPlayer): Game {
+  private addPlayerInternal(player: IPlayer) {
     console.assert(!this.data.allPlayers[player.name], `Player (${player.name}) already exists`)
     console.assert(!this.data.allCards[player.name], `Player (${player.name}) conflicts with an existing Card`)
     console.assert(!this.data.allLocations[player.name], `Player (${player.name}) conflicts with an existing Location`)
     this.data.allPlayers[player.name] = player
     this.playerChain.add(player.name)
-    return this
   }
 
-  public addPlayer(name: string, data?: any): Game {
+  public addPlayer(name: string, data?: any) {
     this.addPlayerInternal({name, data})
-    return this
   }
 
   public getPlayerCount(): number {
@@ -453,13 +467,12 @@ export class Game {
     this.debugLog(`addCard ${card.name} to ${to.name}`)
   }
 
-  public addCard(locationName: string, cardName: string, cardData?: ICardData, index: number = -1): Game {
+  public addCard(locationName: string, cardName: string, cardData?: ICardData, index: number = -1) {
     // TODO assert that card.name is unique??
     const card = {name: cardName, data: cardData}
     const location = this.data.allLocations[locationName]
     console.assert(typeof location !== 'undefined', `location '${locationName}' does not exist`)
     this.addCardInternal(card, location, index)
-    return this
   }
 
   // public addDice(dice: IDice | IDice[], to: ILocation, index: number = -1): Game {
@@ -589,7 +602,7 @@ export class Game {
     return cardsMoved.map(card => card.name)
   }
 
-  public shuffle(place: LocationName): Game {
+  public shuffle(place: LocationName) {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
@@ -603,11 +616,9 @@ export class Game {
     if (this.render && this.options.debug) {
       this.render()
     }
-
-    return this
   }
 
-  public swap(fromName: LocationName, toName: LocationName): Game {
+  public swap(fromName: LocationName, toName: LocationName) {
     let fromCards = this.getCards(fromName)
     let toCards = this.getCards(toName)
 
@@ -619,10 +630,9 @@ export class Game {
       this.moveCards(toCards, fromName, -1)
     }
 
-    return this
   }
 
-  public reverse(place: LocationName): Game {
+  public reverse(place: LocationName) {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
@@ -637,10 +647,9 @@ export class Game {
       this.render()
     }
 
-    return this
   }
 
-  public roll(place: LocationName): Game {
+  public roll(place: LocationName) {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
@@ -658,11 +667,9 @@ export class Game {
     if (this.render && this.options.debug) {
       this.render()
     }
-
-    return this
   }
 
-  public sort(place: LocationName, sortFn: (a: string, b: string) => number): Game {
+  public sort(place: LocationName, sortFn: (a: string, b: string) => number) {
     const locationNames = Array.isArray(place) ? place : [place]
 
     for (let name of locationNames) {
@@ -675,8 +682,6 @@ export class Game {
     if (this.render && this.options.debug) {
       this.render()
     }
-
-    return this
   }
 
   public toString(): string {
